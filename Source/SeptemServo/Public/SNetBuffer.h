@@ -3,6 +3,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
-//#include "EngineUtils.h"
-#include "Networking.h"
 
+/**
+ * 
+ */
+class SEPTEMSERVO_API SNetBuffer
+{
+public:
+	SNetBuffer();
+	~SNetBuffer();
+};
