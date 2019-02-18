@@ -31,6 +31,7 @@ struct FSNetBufferHead
 	}
 };
 
+// Optional TODO
 union UnionBufferHead
 {
 	uint8 byte[16]; // 4x 32bit
