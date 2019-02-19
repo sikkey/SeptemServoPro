@@ -6,6 +6,43 @@
 
 namespace Septem
 {
+	// Get Fail Array 
+	// like getnext in KMP
+	// private call for BufferBuffer
+	// if you need multi match buffer , need  Aho-Corasick_automation with tire tree
+	// make sure: buffer.len == fail.len
+	template<typename T>
+	static void BufferFailArray(T* buffer, int32* fail, const int32 length)
+	{
+		check(length > 0);
+		check(buffer);
+		check(fail);
+
+		fail[0] = -1;
+		int index = 0;
+		int failIndex = -1;
+
+		while (index + 1 < length)
+		{
+			if (-1 == failIndex || buffer[index] == buffer[failIndex])
+			{
+				
+				if (buffer[++index] == buffer[++failIndex])
+				{
+					fail[index] = fail[failIndex];
+				}
+				else {
+					fail[index] = failIndex;
+				}
+			}
+			else {
+				//here must be: failIndex < fail[failIndex];
+				failIndex = fail[failIndex];
+			}
+		}
+
+	}
+
 	// template for buffer strstr
 	// find N in M, return the first index or  -1 when faied.
 	// BufferBuffer<TChar> ( strP1, strlen1, strP2, strlen2);
@@ -17,12 +54,12 @@ namespace Septem
 	// NLength		:Buffer N length
 	// return int32	: the first index or  -1 when faied.
 	template<typename T>
-	int32 BufferBuffer(T * MBuffer, const int32 MLength, T * NBuffer, const int32 NLength)
+	static int32 BufferBuffer(T * MBuffer, const int32 MLength, T * NBuffer, const int32 NLength)
 	{
 		const int32 FAIL_CODE = -1;
-		int32 IndexM = 0; // i
-		int32 IndexN = 0; // j
-		int32 Next[NLength] = { 0 };
+		int32 i = 0; // index for MBuffer
+		int32 j = 0; // index for NBuffer;
+		int32 Fail[NLength] = { 0 };
 
 		if (MLength <= 0 || NLength <= 0)
 			return FAIL_CODE;
@@ -30,42 +67,27 @@ namespace Septem
 		check(MBuffer);
 		check(NBuffer);
 
-		// TODO:get next
+		// get fail array
+		BufferFailArray(NBuffer, Fail, Nlength);
 
-		// IndexN - NLength <= MLength - IndexM
-		// makesure IndexM < MLength && IndexN < NLength
-		while( IndexM + NLength <= IndexN + MLength)
+		// Nlength - j <= MLength - i
+		// makesure i<MLength && j < NLength
+		while (i < MLength && j < NLength)
 		{
-Flag_Compare:
-			// here must be: M(i - j)~M(i - 1) == N0~N(j - 1)
-			// so compare Mi =?= Nj
-			if ((*(MBuffer + IndexM)) == (*(NBuffer + IndexN)))
+			if (-1 == j || MBuffer[i] == NBuffer[j])
 			{
-				++IndexN;
-				// Mi == N(j-1)
-				if (IndexN == NLength)
-				{
-					// means M(i - n + 1)~Mi == N0~N(n - 1)
-					// j == n, found the index = i-j+1
-					return IndexM - NLength + 1;
-				}
-				++IndexM;
-
-				if (IndexM == MLength)
-					return FAIL_CODE;
+				// restart match or get match
+				++i; ++j;
 			}
 			else {
-				// Mi =/= Nj
-				if (IndexN > 0)
-				{
-					IndexN = Next[IndexN]; // j< next(j)
-					goto Flag_Compare;
-				}
-				else {
-					// 0==j,  Mi != N0
-					++i;
-				}
+				// match failed
+				j = Fail[j];
 			}
+		}
+
+		if (NLength == j)
+		{
+			return i - NLength;
 		}
 
 		return FAIL_CODE;
