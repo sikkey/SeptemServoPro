@@ -13,7 +13,7 @@
 
 struct FSNetBufferHead
 {
-	int32 syncword;
+	int32 syncword; // combine with 4 char(uint8).  make them differents to get efficient  
 	uint8 version;
 	uint8 fastcode;  // xor value without this byte
 	uint16 uid; // class id
