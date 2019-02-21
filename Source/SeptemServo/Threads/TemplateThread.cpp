@@ -1,18 +1,13 @@
 // Copyright (c) 2013-2019 7Mersenne All Rights Reserved.
 
-#include "ListenThread.h"
+#include "TemplateThread.h"
 
-FListenThread::FListenThread()
+FTemplateThread::FTemplateThread()
 	:FRunnable()
-	,TimeToDie(false)
-	, bStopped(false)
-	, IPAdress(0ui32) // default ip = 0.0.0.0
-	,Port(3717)
-	,Thread(nullptr)
 {
 }
 
-FListenThread::~FListenThread()
+FTemplateThread::~FTemplateThread()
 {
 	// cleanup thread
 	if (nullptr != Thread)
@@ -24,18 +19,28 @@ FListenThread::~FListenThread()
 	// null events here
 }
 
-bool FListenThread::Init()
+bool FTemplateThread::Init()
 {
+	// if init success, return true here
 	return false;
 }
 
-uint32 FListenThread::Run()
+uint32 FTemplateThread::Run()
 {
 	//FPlatformMisc::MemoryBarrier();
+
+	/*
+	while(!bStopped)
+	{
+		// tick run
+	}
+	*/
+
+	// ExitCode:0 means no error
 	return 0;
 }
 
-void FListenThread::Stop()
+void FTemplateThread::Stop()
 {
 	if (!bStopped) {
 		TimeToDie = true;
@@ -49,9 +54,8 @@ void FListenThread::Stop()
 	}
 }
 
-void FListenThread::Exit()
+void FTemplateThread::Exit()
 {
-	UE_LOG(LogTemp, Display, TEXT("FListenThread: exit()\n"));
 }
 
 /**
@@ -62,7 +66,7 @@ void FListenThread::Exit()
  *
  * @return True if the thread exited graceful, false otherwise
  */
-bool FListenThread::KillThread()
+bool FTemplateThread::KillThread()
 {
 	bool bDidExit = true;
 
@@ -77,7 +81,7 @@ bool FListenThread::KillThread()
 		// If waiting was specified, wait the amount of time. If that fails,
 		// brute force kill that thread. Very bad as that might leak.
 		Thread->WaitForCompletion();
-		
+
 		// Clean up the event
 		// if(event) FPlatformProcess::ReturnSynchEventToPool(event);
 		// event = nullptr;
@@ -90,18 +94,11 @@ bool FListenThread::KillThread()
 	return bDidExit;
 }
 
-FListenThread * FListenThread::Create(int32 InPort)
+FTemplateThread * FTemplateThread::Create()
 {
-	// if you need create event
-	//Event = FPlatformProcess::GetSynchEventFromPool();
-
-	// create runnable
-	FListenThread* runnable = new FListenThread();
-	runnable->Port = InPort;
-
+	FTemplateThread* runnable = new FTemplateThread();
 	// create thread with runnable
 	FRunnableThread* thread = FRunnableThread::Create(runnable, TEXT("FPrimeNumberWorker"), 0, TPri_BelowNormal); //windows default = 8mb for thread, could specify 
-	
 	if (nullptr == thread)
 	{
 		// create failed

@@ -7,7 +7,7 @@
 #include "Networking.h"
 
 /**
- * 
+ * litsen runnable for server thread
  */
 class SEPTEMSERVO_API FListenThread : public FRunnable
 {
@@ -15,14 +15,20 @@ public:
 	FListenThread();
 	virtual ~FListenThread();
 
+	// Begin FRunnable interface.
 	virtual bool Init() override;
-
-	// 
 	virtual uint32 Run() override;
-
 	virtual void Stop() override;
-
 	virtual void Exit() override;
+	// End FRunnable interface
+
+	//~~~ Starting and Stopping Thread ~~~
+
+	/** Makes sure this thread has stopped properly */
+	// must use KillThread to void deadlock
+	// if you use thread->kill() directly , easy to get deadlock or crash
+	bool KillThread();// use KillThread instead of thread->kill
+	static FListenThread* Create(int32 InPort = 3717);
 
 private:
 	//---------------------------------------------
@@ -32,10 +38,15 @@ private:
 	/** If true, the thread should exit. */
 	TAtomic<bool> TimeToDie;
 
+	// if ture means we had called stop();
+	FThreadSafeBool bStopped;
+	//TAtomic<bool> bPause;  //or FThreadSafeBool bPause;
+	//FEvent * Semaphore;
+
 	//---------------------------------------------
 	// server config
 	//---------------------------------------------
-	FIPv4Endpoint ServerIPv4EndPoint;
+	//FIPv4Endpoint ServerIPv4EndPoint;
 	FIPv4Address IPAdress;
 	int32 Port;
 
