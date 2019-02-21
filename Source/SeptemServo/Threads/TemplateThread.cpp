@@ -1,26 +1,13 @@
 // Copyright (c) 2013-2019 7Mersenne All Rights Reserved.
 
-#include "ConnectThread.h"
+#include "TemplateThread.h"
 
-FConnectThread::FConnectThread()
+FTemplateThread::FTemplateThread()
 	:FRunnable()
-	, ConnectSocket(nullptr)
-	, ClientIPAdress(0ui32)
-	, Port(3717)
-	, RankId(0)
 {
 }
 
-FConnectThread::FConnectThread(FSocket * InSocket, FIPv4Address & InIP, int32 InPort, int32 InRank)
-	:FRunnable()
-	, ConnectSocket(InSocket)
-	, ClientIPAdress(InIP)
-	, Port(InPort)
-	, RankId(InRank)
-{
-}
-
-FConnectThread::~FConnectThread()
+FTemplateThread::~FTemplateThread()
 {
 	// cleanup thread
 	if (nullptr != Thread)
@@ -32,22 +19,21 @@ FConnectThread::~FConnectThread()
 	// null events here
 }
 
-bool FConnectThread::Init()
+bool FTemplateThread::Init()
 {
 	// if init success, return true here
 	return false;
 }
 
-uint32 FConnectThread::Run()
+uint32 FTemplateThread::Run()
 {
 	//FPlatformMisc::MemoryBarrier();
 
 	/*
+	// [Warnning] Mustn't use bStopped here!
 	while(!TimeToDie)
 	{
-		// TODO: pending data
-		// TODO: recv data
-		// TODO: check disconnect
+		// tick run
 	}
 	*/
 
@@ -55,7 +41,7 @@ uint32 FConnectThread::Run()
 	return 0;
 }
 
-void FConnectThread::Stop()
+void FTemplateThread::Stop()
 {
 	if (!bStopped) {
 		TimeToDie = true;
@@ -69,18 +55,19 @@ void FConnectThread::Stop()
 	}
 }
 
-void FConnectThread::Exit()
+void FTemplateThread::Exit()
 {
-	// cleanup socket
-	if (nullptr != ConnectSocket)
-	{
-		delete ConnectSocket;
-		ConnectSocket = nullptr;
-	}
-	UE_LOG(LogTemp, Display, TEXT("FConnectThread: exit()\n"));
 }
 
-bool FConnectThread::KillThread()
+/**
+ * Tells the thread to exit. If the caller needs to know when the thread
+ * has exited, it should use the bShouldWait value and tell it how long
+ * to wait before deciding that it is deadlocked and needs to be destroyed.
+ * NOTE: having a thread forcibly destroyed can cause leaks in TLS, etc.
+ *
+ * @return True if the thread exited graceful, false otherwise
+ */
+bool FTemplateThread::KillThread()
 {
 	bool bDidExit = true;
 
@@ -103,23 +90,16 @@ bool FConnectThread::KillThread()
 		// here will call Stop()
 		delete Thread;
 		Thread = nullptr;
-		
-		// close socket
-		//TODO: check socket close
-		ConnectSocket->Shutdown(ESocketShutdownMode::ReadWrite);
-		ConnectSocket->Close();
 	}
 
 	return bDidExit;
 }
 
-FConnectThread * FConnectThread::Create(FSocket * InSocket, FIPv4Address & InIP, int32 InPort, int32 InRank)
+FTemplateThread * FTemplateThread::Create()
 {
-	FConnectThread* runnable = new FConnectThread(InSocket, InIP, InPort, InRank);
+	FTemplateThread* runnable = new FTemplateThread();
 	// create thread with runnable
-	FString threadName = FString::Printf("FConnectThread%d", InRank); //FString::Printf(TEXT("FConnectThread%d"), InRank);
-
-	FRunnableThread* thread = FRunnableThread::Create(runnable, *threadName, 0, TPri_BelowNormal); //windows default = 8mb for thread, could specify 
+	FRunnableThread* thread = FRunnableThread::Create(runnable, TEXT("FTemplateThread"), 0, TPri_BelowNormal); //windows default = 8mb for thread, could specify 
 	if (nullptr == thread)
 	{
 		// create failed
@@ -131,6 +111,3 @@ FConnectThread * FConnectThread::Create(FSocket * InSocket, FIPv4Address & InIP,
 	runnable->Thread = thread;
 	return runnable;
 }
-
-
-
