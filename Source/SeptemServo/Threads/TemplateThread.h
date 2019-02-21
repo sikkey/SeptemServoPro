@@ -27,6 +27,9 @@
 	pFRunnableThread->Kill(true) will call pFRunnable->Stop()
 	see WindowsRunnableThread.h
 
+	control
+	use FPlatformProcess::Sleep(x) to sleep x seconds
+
 	etc:
 	FEvent *  semaphore;  // for pause and trigger a thread
 	use FScopeLock ScopeLock(&CriticalSection); to lock in a scope

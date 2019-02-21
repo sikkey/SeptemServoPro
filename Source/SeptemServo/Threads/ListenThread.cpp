@@ -4,12 +4,15 @@
 
 FListenThread::FListenThread()
 	:FRunnable()
-	,TimeToDie(false)
+	, TimeToDie(false)
 	, bStopped(false)
 	, IPAdress(0ui32) // default ip = 0.0.0.0
-	,Port(3717)
-	,Thread(nullptr)
+	, Port(3717)
+	, MaxBacklog(100)
+	, Thread(nullptr)
+	, RankId(0)
 {
+	ConnectThreadList.Reset(MaxBacklog);
 }
 
 FListenThread::~FListenThread()
@@ -26,11 +29,83 @@ FListenThread::~FListenThread()
 
 bool FListenThread::Init()
 {
-	return false;
+	// do network 
+
+	// 1. create socket
+	ListenerSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("listen socket"), false);
+	check(ListenerSocket);
+
+	if (nullptr == ListenerSocket)
+	{
+		UE_LOG(LogTemp, Display, TEXT("ListenerSocket: failed to create socket\n"));
+		return false;
+	}
+
+	// 2. bind socket
+	TSharedRef<FInternetAddr> addr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
+	addr->SetIp(IPAdress.Value);
+	addr->SetPort(Port);
+	bool bBind = ListenerSocket->Bind(*addr);
+
+	check(bBind);
+
+	if (!bBind)
+	{
+		UE_LOG(LogTemp, Display, TEXT("ListenerSocket: failed to bind port = %d\n"), Port);
+		return false;
+	}
+
+	// 3. listen socket
+
+	bool bListen = ListenerSocket->Listen(MaxBacklog);
+
+	UE_LOG(LogTemp, Display, TEXT("ListenerSocket: server listening\n"));
+
+	// 4. accept client
+	// 5. recv data
+	// accept&recv task in Run()
+	return true;
 }
 
 uint32 FListenThread::Run()
 {
+	bool bHasPendingConnection = false;
+	if (nullptr == ListenerSocket) return 1ui32;  //exit code == 1 : thread run failed
+	while (!TimeToDie)
+	{
+		if (ListenerSocket->HasPendingConnection(bHasPendingConnection))
+		{
+			if (!bHasPendingConnection)
+			{
+				//no pending connection
+				//FPlatformProcess::Sleep(0.01f);
+				continue;
+			}
+
+			FPlatformMisc::MemoryBarrier();
+
+			TSharedRef<FInternetAddr> clientAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
+			// accept with description = client {Rank Id}
+			FSocket* ConnectSocket = ListenerSocket->Accept(*clientAddr, FString::Printf("ConnectSocket%d", RankId));
+			check(ConnectSocket, "accept error! couldn't created connect socket");
+			uint32 ipInt;
+			int32 clientPort = clientAddr->GetPort();
+			clientAddr->GetIp(ipInt);
+			FIPv4Address clientIP(ipInt);
+
+			FPlatformMisc::MemoryBarrier();
+			// connectThread will hold the ConnectSocket ptr, Don't care about it in this thread
+			ConnectSocket->SetNonBlocking(true);
+			FConnectThread* connectThread = FConnectThread::Create(ConnectSocket, clientIP, clientPort, RankId);
+			ConnectThreadList.Add(connectThread);
+			++RankId;
+		}
+		else {
+			UE_LOG(LogTemp, Display, TEXT("ListenerSocket: throw error when pending connection\n"));
+		}
+
+		// TODO: remove disconnected client
+	}
 	//FPlatformMisc::MemoryBarrier();
 	return 0;
 }
@@ -43,7 +118,7 @@ void FListenThread::Stop()
 		//FRunnable::Stop(); // father function == {}
 
 		// because pthread->kill will call stop
-		// you cannot call pthread->kill here
+		// IMPORTANT!!!you cannot call pthread->kill here!!!
 
 		bStopped = true;
 	}
@@ -51,6 +126,12 @@ void FListenThread::Stop()
 
 void FListenThread::Exit()
 {
+	// cleanup socket
+	if (nullptr != ListenerSocket)
+	{
+		delete ListenerSocket;
+		ListenerSocket = nullptr;
+	}
 	UE_LOG(LogTemp, Display, TEXT("FListenThread: exit()\n"));
 }
 
@@ -76,7 +157,13 @@ bool FListenThread::KillThread()
 
 		// If waiting was specified, wait the amount of time. If that fails,
 		// brute force kill that thread. Very bad as that might leak.
-		Thread->WaitForCompletion();
+		Thread->WaitForCompletion();	//block call
+
+		for (int32 i = 0; i < ConnectThreadList.Num(); ++i)
+		{
+			check(ConnectThreadList[i]);
+			ConnectThreadList[i]->KillThread();	//block call
+		}
 		
 		// Clean up the event
 		// if(event) FPlatformProcess::ReturnSynchEventToPool(event);
@@ -85,6 +172,11 @@ bool FListenThread::KillThread()
 		// here will call Stop()
 		delete Thread;
 		Thread = nullptr;
+
+		// close socket
+		//TODO: check socket close
+		ListenerSocket->Shutdown(ESocketShutdownMode::ReadWrite);
+		ListenerSocket->Close();
 	}
 
 	return bDidExit;
@@ -100,7 +192,7 @@ FListenThread * FListenThread::Create(int32 InPort)
 	runnable->Port = InPort;
 
 	// create thread with runnable
-	FRunnableThread* thread = FRunnableThread::Create(runnable, TEXT("FPrimeNumberWorker"), 0, TPri_BelowNormal); //windows default = 8mb for thread, could specify 
+	FRunnableThread* thread = FRunnableThread::Create(runnable, TEXT("FListenThread"), 0, TPri_BelowNormal); //windows default = 8mb for thread, could specify 
 	
 	if (nullptr == thread)
 	{

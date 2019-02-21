@@ -30,7 +30,8 @@ uint32 FTemplateThread::Run()
 	//FPlatformMisc::MemoryBarrier();
 
 	/*
-	while(!bStopped)
+	// [Warnning] Mustn't use bStopped here!
+	while(!TimeToDie)
 	{
 		// tick run
 	}
@@ -98,7 +99,7 @@ FTemplateThread * FTemplateThread::Create()
 {
 	FTemplateThread* runnable = new FTemplateThread();
 	// create thread with runnable
-	FRunnableThread* thread = FRunnableThread::Create(runnable, TEXT("FPrimeNumberWorker"), 0, TPri_BelowNormal); //windows default = 8mb for thread, could specify 
+	FRunnableThread* thread = FRunnableThread::Create(runnable, TEXT("FTemplateThread"), 0, TPri_BelowNormal); //windows default = 8mb for thread, could specify 
 	if (nullptr == thread)
 	{
 		// create failed

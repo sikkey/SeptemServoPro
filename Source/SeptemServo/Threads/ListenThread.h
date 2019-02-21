@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Core/Private/HAL/PThreadRunnableThread.h"
 #include "Networking.h"
+#include "ConnectThread.h"
 
 /**
  * litsen runnable for server thread
@@ -36,10 +37,10 @@ private:
 	//---------------------------------------------
 
 	/** If true, the thread should exit. */
-	TAtomic<bool> TimeToDie;
+	TAtomic<bool> TimeToDie;  //check in run()
 
 	// if ture means we had called stop();
-	FThreadSafeBool bStopped;
+	FThreadSafeBool bStopped; // check stop()
 	//TAtomic<bool> bPause;  //or FThreadSafeBool bPause;
 	//FEvent * Semaphore;
 
@@ -49,6 +50,10 @@ private:
 	//FIPv4Endpoint ServerIPv4EndPoint;
 	FIPv4Address IPAdress;
 	int32 Port;
+	int32 MaxBacklog;				// max count of client
+
+	// socket
+	FSocket* ListenerSocket;
 
 	// server listen thread
 	FRunnableThread* Thread;
@@ -56,5 +61,6 @@ private:
 	//---------------------------------------------
 	// client connections
 	//---------------------------------------------
+	int32 RankId;	// consider volatile 
+	TArray<FConnectThread*> ConnectThreadList;
 };
-
