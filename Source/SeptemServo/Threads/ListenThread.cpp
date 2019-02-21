@@ -11,6 +11,7 @@ FListenThread::FListenThread()
 	, MaxBacklog(100)
 	, Thread(nullptr)
 	, RankId(0)
+	, ListenerSocket(nullptr)
 {
 	ConnectThreadList.Reset(MaxBacklog);
 }
@@ -86,8 +87,8 @@ uint32 FListenThread::Run()
 
 			TSharedRef<FInternetAddr> clientAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
 			// accept with description = client {Rank Id}
-			FSocket* ConnectSocket = ListenerSocket->Accept(*clientAddr, FString::Printf("ConnectSocket%d", RankId));
-			check(ConnectSocket, "accept error! couldn't created connect socket");
+			FSocket* ConnectSocket = ListenerSocket->Accept(*clientAddr, FString::Printf(TEXT("ConnectSocket%d"), RankId));
+			check(ConnectSocket);
 			uint32 ipInt;
 			int32 clientPort = clientAddr->GetPort();
 			clientAddr->GetIp(ipInt);
@@ -104,7 +105,28 @@ uint32 FListenThread::Run()
 			UE_LOG(LogTemp, Display, TEXT("ListenerSocket: throw error when pending connection\n"));
 		}
 
-		// TODO: remove disconnected client
+		// remove disconnected client
+		for (int32 i = ConnectThreadList.Num() - 1; i >= 0; --i)
+		{
+			// TODO: FPlatformMisc::MemoryBarrier(); to makesure i
+			if (ConnectThreadList[i] != nullptr)
+			{
+				if (!ConnectThreadList[i]->IsSocketConnection())
+				{
+					if (ConnectThreadList[i]->KillThread())	// kill thread
+					{
+						delete ConnectThreadList[i];
+						ConnectThreadList[i] = nullptr;
+
+						// TODO: check O(1) swap tail delete algorithm
+						ConnectThreadList.RemoveAtSwap(i);
+					}
+				}
+			}
+			else {
+				ConnectThreadList.RemoveAtSwap(i);
+			}
+		}
 	}
 	//FPlatformMisc::MemoryBarrier();
 	return 0;
@@ -131,6 +153,23 @@ void FListenThread::Exit()
 	{
 		delete ListenerSocket;
 		ListenerSocket = nullptr;
+	}
+
+	// cleanup threads
+	for (int32 i = 0; i < ConnectThreadList.Num(); ++i)
+	{
+		if (nullptr != ConnectThreadList[i])
+		{
+			if (ConnectThreadList[i]->KillThread())
+			{
+				delete ConnectThreadList[i];
+				ConnectThreadList[i] = nullptr;
+			}
+			else {
+				// TODO: kill failed
+				UE_LOG(LogTemp, Display, TEXT("FListenThread: kill thread failed with memory leak in exit()\n"));
+			}
+		}
 	}
 	UE_LOG(LogTemp, Display, TEXT("FListenThread: exit()\n"));
 }

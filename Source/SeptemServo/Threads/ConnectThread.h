@@ -30,6 +30,9 @@ public:
 	bool KillThread();// use KillThread instead of thread->kill
 	static FConnectThread* Create(FSocket* InSocket, FIPv4Address& InIP, int32 InPort, int32 InRank = 0);
 
+	// states
+	bool IsSocketConnection();
+
 private:
 	//---------------------------------------------
 	// thread control

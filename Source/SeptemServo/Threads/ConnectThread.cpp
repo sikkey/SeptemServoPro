@@ -41,15 +41,18 @@ bool FConnectThread::Init()
 uint32 FConnectThread::Run()
 {
 	//FPlatformMisc::MemoryBarrier();
+	uint32 pendingDataSize = 0;
 
-	/*
-	while(!TimeToDie)
+	if (nullptr == ConnectSocket) return 1ui32;  //exit code == 1 : thread run failed
+	while (!TimeToDie)
 	{
-		// TODO: pending data
-		// TODO: recv data
-		// TODO: check disconnect
+		if (ConnectSocket->HasPendingData(pendingDataSize))
+		{
+			// TODO: pending data
+			// TODO: recv data
+			// TODO: check disconnect
+		}
 	}
-	*/
 
 	// ExitCode:0 means no error
 	return 0;
@@ -64,6 +67,8 @@ void FConnectThread::Stop()
 
 		// because pthread->kill will call stop
 		// you cannot call pthread->kill here
+
+		ConnectSocket->Close();
 
 		bStopped = true;
 	}
@@ -117,7 +122,7 @@ FConnectThread * FConnectThread::Create(FSocket * InSocket, FIPv4Address & InIP,
 {
 	FConnectThread* runnable = new FConnectThread(InSocket, InIP, InPort, InRank);
 	// create thread with runnable
-	FString threadName = FString::Printf("FConnectThread%d", InRank); //FString::Printf(TEXT("FConnectThread%d"), InRank);
+	FString threadName = FString::Printf(TEXT("FConnectThread%d"), InRank);
 
 	FRunnableThread* thread = FRunnableThread::Create(runnable, *threadName, 0, TPri_BelowNormal); //windows default = 8mb for thread, could specify 
 	if (nullptr == thread)
@@ -130,6 +135,18 @@ FConnectThread * FConnectThread::Create(FSocket * InSocket, FIPv4Address & InIP,
 	// setting thread
 	runnable->Thread = thread;
 	return runnable;
+}
+
+bool FConnectThread::IsSocketConnection()
+{
+	if (ConnectSocket)
+	{
+		if (ConnectSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 
