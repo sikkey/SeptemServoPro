@@ -71,6 +71,8 @@ public:
 	bool KillThread();// use KillThread instead of thread->kill
 	static FTemplateThread* Create();
 
+	// state
+	bool IsKillDone();
 private:
 	//---------------------------------------------
 	// thread control
@@ -81,6 +83,16 @@ private:
 
 	// if ture means we had called stop();
 	FThreadSafeBool bStopped;
+
+	// thread had killed, so there is no run
+	FThreadSafeBool bKillDone;
+
+	// show the step of lifecycle
+	// 0  construct
+	// 1: init
+	// 2: run
+	// 3: exit
+	FThreadSafeCounter LifecycleStep;
 	//TAtomic<bool> bPause;  //or FThreadSafeBool bPause;
 	//FEvent * Semaphore;
 

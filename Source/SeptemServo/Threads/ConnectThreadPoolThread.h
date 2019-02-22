@@ -5,36 +5,24 @@
 #include "CoreMinimal.h"
 #include "Core/Private/HAL/PThreadRunnableThread.h"
 #include "Networking.h"
+#include "ConnectThread.h"
 
 /**
  * 
  */
-class SEPTEMSERVO_API FConnectThread : public FRunnable
+class SEPTEMSERVO_API FConnectThreadPoolThread : public FRunnable
 {
 public:
-	FConnectThread();
-	FConnectThread(FSocket* InSocket, FIPv4Address& InIP, int32 InPort, int32 InRank = 0);
-	virtual ~FConnectThread();
+	FConnectThreadPoolThread();
+	FConnectThreadPoolThread(int32 InMaxBacklog);
+	~FConnectThreadPoolThread();
+
 	// Begin FRunnable interface.
 	virtual bool Init() override;
 	virtual uint32 Run() override;
 	virtual void Stop() override;
 	virtual void Exit() override;
 	// End FRunnable interface
-
-	//~~~ Starting and Stopping Thread ~~~
-
-	/** Makes sure this thread has stopped properly */
-	// must use KillThread to void deadlock
-	// if you use thread->kill() directly , easy to get deadlock or crash
-	// block kill
-	bool KillThread();// use KillThread instead of thread->kill
-	static FConnectThread* Create(FSocket* InSocket, FIPv4Address& InIP, int32 InPort, int32 InRank = 0);
-
-	// states
-	bool IsSocketConnection();
-	bool IsKillDone();
-	int32 GetRankID() const;
 
 private:
 	//---------------------------------------------
@@ -51,7 +39,6 @@ private:
 	FThreadSafeBool bKillDone;
 
 	FThreadSafeCounter LifecycleStep;
-
 	//TAtomic<bool> bPause;  //or FThreadSafeBool bPause;
 	//FEvent * Semaphore;
 
@@ -59,14 +46,28 @@ private:
 	FRunnableThread* Thread;
 
 	//---------------------------------------------
-	// connection settings
+	// client connections
 	//---------------------------------------------
-	
-	FSocket* ConnectSocket;				// socket
-	FIPv4Address ClientIPAdress;		// client ip
-	int32 Port;										// client Port
-	int32 RankId;									// rank id
+	int32 RankId;	// consider volatile 
+	FCriticalSection ThreadPoolLock;
+	TArray<FConnectThread*> ConnectThreadPool;
 
-	TArray<uint8> ReceivedData;
-	static int32 MaxReceivedCount; // = 1024 * 1024;
+	void SafeCleanupPool();
+
+public:
+	//-------------------------------------------------------------------
+	// Critical Lock Call By Another Thread
+	//-------------------------------------------------------------------
+	//~~~ Starting and Stopping Thread ~~~
+
+	/** Makes sure this thread has stopped properly */
+	// must use KillThread to void deadlock
+	// if you use thread->kill() directly , easy to get deadlock or crash
+	bool KillThread();// use KillThread instead of thread->kill
+	static FConnectThreadPoolThread* Create(int32 InMaxBacklog = 100);
+	void SafeHoldThread(FConnectThread* InThread);
+
+	// state
+	bool IsKillDone();
+
 };

@@ -63,4 +63,6 @@ private:
 	//---------------------------------------------
 	int32 RankId;	// consider volatile 
 	TArray<FConnectThread*> ConnectThreadList;
+
+	void CleanupDisconnection();
 };
