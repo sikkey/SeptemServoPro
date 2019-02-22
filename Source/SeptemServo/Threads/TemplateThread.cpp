@@ -4,11 +4,17 @@
 
 FTemplateThread::FTemplateThread()
 	:FRunnable()
+	, bKillDone(false)
 {
 }
 
 FTemplateThread::~FTemplateThread()
 {
+	if (LifecycleStep.GetValue() == 2)
+	{
+		UE_LOG(LogTemp, Display, TEXT("FTemplateThread destruct: cannot exit safe"));
+	}
+
 	// cleanup thread
 	if (nullptr != Thread)
 	{
@@ -17,16 +23,21 @@ FTemplateThread::~FTemplateThread()
 	}
 	// cleanup events
 	// null events here
+
+	// cleanup init ptr
+	// when init false, that won't call Exit()
 }
 
 bool FTemplateThread::Init()
 {
+	LifecycleStep.Set(1);
 	// if init success, return true here
 	return false;
 }
 
 uint32 FTemplateThread::Run()
 {
+	LifecycleStep.Set(2);
 	//FPlatformMisc::MemoryBarrier();
 
 	/*
@@ -57,6 +68,8 @@ void FTemplateThread::Stop()
 
 void FTemplateThread::Exit()
 {
+	LifecycleStep.Set(3);
+	// cleanup Run() ptr;
 }
 
 /**
@@ -69,30 +82,33 @@ void FTemplateThread::Exit()
  */
 bool FTemplateThread::KillThread()
 {
-	bool bDidExit = true;
-
-	TimeToDie = true;
-
-	if (nullptr != Thread)
+	if (bKillDone)
 	{
-		// Trigger the thread so that it will come out of the wait state if
-		// it isn't actively doing work
-		//if(event) event->Trigger();
+		TimeToDie = true;
 
-		// If waiting was specified, wait the amount of time. If that fails,
-		// brute force kill that thread. Very bad as that might leak.
-		Thread->WaitForCompletion();
+		if (nullptr != Thread)
+		{
+			// Trigger the thread so that it will come out of the wait state if
+			// it isn't actively doing work
+			//if(event) event->Trigger();
 
-		// Clean up the event
-		// if(event) FPlatformProcess::ReturnSynchEventToPool(event);
-		// event = nullptr;
+			// If waiting was specified, wait the amount of time. If that fails,
+			// brute force kill that thread. Very bad as that might leak.
+			Thread->WaitForCompletion();
 
-		// here will call Stop()
-		delete Thread;
-		Thread = nullptr;
+			// Clean up the event
+			// if(event) FPlatformProcess::ReturnSynchEventToPool(event);
+			// event = nullptr;
+
+			// here will call Stop()
+			delete Thread;
+			Thread = nullptr;
+		}
+
+		bKillDone = true;
 	}
 
-	return bDidExit;
+	return bKillDone;
 }
 
 FTemplateThread * FTemplateThread::Create()
@@ -110,4 +126,10 @@ FTemplateThread * FTemplateThread::Create()
 	// setting thread
 	runnable->Thread = thread;
 	return runnable;
+}
+
+bool FTemplateThread::IsKillDone()
+{
+	bool ret = bKillDone;
+	return ret;
 }

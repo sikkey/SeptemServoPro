@@ -26,6 +26,14 @@ FListenThread::~FListenThread()
 	}
 	// cleanup events
 	// null events here
+
+	// cleanup init ptr
+	if (ListenerSocket)
+	{
+		ListenerSocket->Close();
+		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ListenerSocket);
+		ListenerSocket = nullptr;
+	}
 }
 
 bool FListenThread::Init()
@@ -34,7 +42,7 @@ bool FListenThread::Init()
 
 	// 1. create socket
 	ListenerSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("listen socket"), false);
-	check(ListenerSocket);
+	//check(ListenerSocket);
 
 	if (nullptr == ListenerSocket)
 	{
@@ -48,7 +56,7 @@ bool FListenThread::Init()
 	addr->SetPort(Port);
 	bool bBind = ListenerSocket->Bind(*addr);
 
-	check(bBind);
+	//check(bBind);
 
 	if (!bBind)
 	{
@@ -79,25 +87,30 @@ uint32 FListenThread::Run()
 			if (!bHasPendingConnection)
 			{
 				//no pending connection
-				//FPlatformProcess::Sleep(0.01f);
+				//FPlatformProcess::Sleep(0.02f);
 				continue;
 			}
 
-			FPlatformMisc::MemoryBarrier();
+			//FPlatformMisc::MemoryBarrier();
 
 			TSharedRef<FInternetAddr> clientAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
+			FIPv4Endpoint endPoint(clientAddr);
 			// accept with description = client {Rank Id}
 			FSocket* ConnectSocket = ListenerSocket->Accept(*clientAddr, FString::Printf(TEXT("ConnectSocket%d"), RankId));
-			check(ConnectSocket);
-			uint32 ipInt;
-			int32 clientPort = clientAddr->GetPort();
-			clientAddr->GetIp(ipInt);
-			FIPv4Address clientIP(ipInt);
 
-			FPlatformMisc::MemoryBarrier();
+			if(nullptr == ConnectSocket)
+			{
+				UE_LOG(LogTemp, Display, TEXT("ListenerSocket: accept null socket, listener cannot read and write \n"));
+				// break and close the thread
+				return 1ui32;
+			}
+
+			//check(ConnectSocket && "ConnectSocket == nullptr");
 			// connectThread will hold the ConnectSocket ptr, Don't care about it in this thread
 			ConnectSocket->SetNonBlocking(true);
-			FConnectThread* connectThread = FConnectThread::Create(ConnectSocket, clientIP, clientPort, RankId);
+
+			FPlatformMisc::MemoryBarrier();
+			FConnectThread* connectThread = FConnectThread::Create(ConnectSocket, endPoint.Address, endPoint.Port, RankId);
 			ConnectThreadList.Add(connectThread);
 			++RankId;
 		}
@@ -113,13 +126,15 @@ uint32 FListenThread::Run()
 			{
 				if (!ConnectThreadList[i]->IsSocketConnection())
 				{
+					// TODO: block listen
 					if (ConnectThreadList[i]->KillThread())	// kill thread
 					{
 						delete ConnectThreadList[i];
 						ConnectThreadList[i] = nullptr;
 
-						// TODO: check O(1) swap tail delete algorithm
-						ConnectThreadList.RemoveAtSwap(i);
+						// O(1): remove the last hole element and swap with the last element. Don't shrink array!
+						// the rank will not be out of order
+						ConnectThreadList.RemoveAtSwap(i, 1, false);
 					}
 				}
 			}
@@ -243,4 +258,34 @@ FListenThread * FListenThread::Create(int32 InPort)
 	// setting thread
 	runnable->Thread = thread;
 	return runnable;
+}
+
+void FListenThread::CleanupDisconnection()
+{
+	// remove disconnected client
+	for (int32 i = ConnectThreadList.Num() - 1; i >= 0; --i)
+	{
+		if (ConnectThreadList[i] != nullptr)
+		{
+			if (!ConnectThreadList[i]->IsSocketConnection())
+			{
+				// this fork is disconnected
+				// TODO: block listen
+				if (ConnectThreadList[i]->KillThread())	// kill thread
+				{
+					delete ConnectThreadList[i];
+					ConnectThreadList[i] = nullptr;
+
+					// O(1): remove the last hole element and swap with the last element. Don't shrink array!
+					// the rank will not be out of order
+					ConnectThreadList.RemoveAtSwap(i, 1, false);
+				}
+			}
+		}
+		else {
+			// O(1): remove the last hole element and swap with the last element. Don't shrink array!
+					// the rank will not be out of order
+			ConnectThreadList.RemoveAtSwap(i, 1, false);
+		}
+	}
 }
