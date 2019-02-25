@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Core/Private/HAL/PThreadRunnableThread.h"
 #include "Networking.h"
-#include "ConnectThread.h"
+#include "ConnectThreadPoolThread.h"
 
 /**
  * litsen runnable for server thread
@@ -54,6 +54,7 @@ private:
 
 	// socket
 	FSocket* ListenerSocket;
+	void SafeDestorySocket();
 
 	// server listen thread
 	FRunnableThread* Thread;
@@ -62,7 +63,7 @@ private:
 	// client connections
 	//---------------------------------------------
 	int32 RankId;	// consider volatile 
-	TArray<FConnectThread*> ConnectThreadList;
 
-	void CleanupDisconnection();
+	FConnectThreadPoolThread* ConnectionPoolThread;
+
 };

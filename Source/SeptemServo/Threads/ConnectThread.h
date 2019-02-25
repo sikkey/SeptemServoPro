@@ -33,7 +33,9 @@ public:
 
 	// states
 	bool IsSocketConnection();
+	bool IsKillCalled();
 	bool IsKillDone();
+	bool IsExited();
 	int32 GetRankID() const;
 
 private:
@@ -48,7 +50,7 @@ private:
 	FThreadSafeBool bStopped;
 
 	// thread had killed, so there is no run
-	FThreadSafeBool bKillDone;
+	FThreadSafeCounter bKillDone;
 
 	FThreadSafeCounter LifecycleStep;
 
@@ -69,4 +71,6 @@ private:
 
 	TArray<uint8> ReceivedData;
 	static int32 MaxReceivedCount; // = 1024 * 1024;
+
+	void SafeDestorySocket();
 };

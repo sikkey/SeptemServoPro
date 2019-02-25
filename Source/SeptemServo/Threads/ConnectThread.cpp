@@ -35,6 +35,9 @@ FConnectThread::~FConnectThread()
 	}
 	// cleanup events
 	// null events here
+
+	// cleanup socket
+	SafeDestorySocket();
 }
 
 bool FConnectThread::Init()
@@ -72,9 +75,11 @@ uint32 FConnectThread::Run()
 				}
 
 				// TODO: recv data
+				UE_LOG(LogTemp, Display, TEXT("FConnectThread: receive chars = %s length = %d\n"), ReceivedData.GetData(), ReceivedData.Num());
 			}
 
 			// TODO: do with no pending data
+			UE_LOG(LogTemp, Display, TEXT("FConnectThread: no pending data!!!\n"));
 			
 			// TODO: check disconnect
 		}
@@ -107,46 +112,57 @@ void FConnectThread::Exit()
 {
 	LifecycleStep.Set(3);
 	// cleanup socket
-	if (nullptr != ConnectSocket)
-	{
-		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ConnectSocket);
-		ConnectSocket = nullptr;
-	}
+	SafeDestorySocket();
 	UE_LOG(LogTemp, Display, TEXT("FConnectThread: exit()\n"));
+
+	LifecycleStep.Set(4);
 }
 
 bool FConnectThread::KillThread()
 {
-	if (bKillDone) {
+	// bKillDone maybe 0
+	if (1 == bKillDone.Increment()) {
+		// bKillDone at least 1, thread safe
 		TimeToDie = true;
 
 		if (nullptr != Thread)
 		{
+			// close socket
+			/*
+			if (nullptr != ConnectSocket && !bStopped)
+			{
+				ConnectSocket->Shutdown(ESocketShutdownMode::ReadWrite);
+			}
+			*/
+			Stop();
+
 			// Trigger the thread so that it will come out of the wait state if
 			// it isn't actively doing work
 			//if(event) event->Trigger();
 
-			// If waiting was specified, wait the amount of time. If that fails,
-			// brute force kill that thread. Very bad as that might leak.
+			// Block until this thread exits()
 			Thread->WaitForCompletion();
 
 			// Clean up the event
 			// if(event) FPlatformProcess::ReturnSynchEventToPool(event);
 			// event = nullptr;
 
-			// here will call Stop()
+			// here will call Stop() again for safe close handle
 			delete Thread;
 			Thread = nullptr;
-
-			// close socket
-			ConnectSocket->Shutdown(ESocketShutdownMode::ReadWrite);
-			ConnectSocket->Close();
 		}
 
-		bKillDone = true;
+		// make sure bKillDone at least 2, thread safe
+		bKillDone.Increment();
 	}
 
-	return bKillDone;
+	if (bKillDone.GetValue() > 100)
+	{
+		// defend killdone overflow
+		bKillDone.Set(2);
+	}
+
+	return bKillDone.GetValue() > 1;
 }
 
 FConnectThread * FConnectThread::Create(FSocket * InSocket, FIPv4Address & InIP, int32 InPort, int32 InRank)
@@ -180,15 +196,34 @@ bool FConnectThread::IsSocketConnection()
 	return false;
 }
 
+bool FConnectThread::IsKillCalled()
+{
+	return bKillDone.GetValue() > 0;
+}
+
 bool FConnectThread::IsKillDone()
 {
-	bool ret = bKillDone;
-	return ret;
+	return bKillDone.GetValue() > 1;
+}
+
+bool FConnectThread::IsExited()
+{
+	return LifecycleStep.GetValue() >= 4;
 }
 
 int32 FConnectThread::GetRankID() const
 {
 	return RankId;
+}
+
+void FConnectThread::SafeDestorySocket()
+{
+	if (nullptr != ConnectSocket)
+	{
+		ConnectSocket->Close();
+		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ConnectSocket);
+		ConnectSocket = nullptr;
+	}
 }
 
 

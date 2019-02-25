@@ -51,8 +51,10 @@ private:
 	int32 RankId;	// consider volatile 
 	FCriticalSection ThreadPoolLock;
 	TArray<FConnectThread*> ConnectThreadPool;
+	TQueue< FConnectThread*, EQueueMode::Spsc> DestructQueue;
 
 	void SafeCleanupPool();
+	void SafeCleanupQueue();
 
 public:
 	//-------------------------------------------------------------------

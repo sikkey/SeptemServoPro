@@ -34,7 +34,7 @@ FConnectThreadPoolThread::~FConnectThreadPoolThread()
 	// when init false, that won't call Exit()
 
 	SafeCleanupPool();
-	
+	SafeCleanupQueue();
 }
 
 bool FConnectThreadPoolThread::Init()
@@ -61,23 +61,43 @@ uint32 FConnectThreadPoolThread::Run()
 			{
 				if (!ConnectThreadPool[i]->IsSocketConnection())
 				{
-					if (ConnectThreadPool[i]->KillThread())
-					{
-						delete ConnectThreadPool[i];
-						ConnectThreadPool[i] = nullptr;
-
-						// O(1): remove the last hole element and swap with the last element. Don't shrink array!
-						// the rank will not be out of order
-						ConnectThreadPool.RemoveAtSwap(i, 1, false);
-					}
-					else {
-
-					}
+					// soft kill:
+					// 1. stop to let the thread exit by itself
+					// 2. add the thread ptr to destruct queue
+					// 3. wait & clean the queue outside
+					ConnectThreadPool[i]->Stop();
+					// enqueue to the wait to clean queue .  thread-safe
+					DestructQueue.Enqueue(ConnectThreadPool[i]);
+					// the ptr had been hold in DestructQueue, don't need delete
+					//ConnectThreadPool[i] = nullptr;
+					// O(1): remove the last hole element and swap with the last element. Don't shrink array!
+					// the rank will not be out of order
+					ConnectThreadPool.RemoveAtSwap(i, 1, false);
 				}
 			}
 			else {
 				// nullptr
 				ConnectThreadPool.RemoveAtSwap(i, 1, false);
+			}
+		}
+
+		// soft clean the queue
+		FConnectThread* thread = nullptr;
+		if (DestructQueue.Peek(thread))
+		{
+			if (nullptr == thread || thread->IsExited())
+			{
+				if (DestructQueue.Dequeue(thread))
+				{
+					if (nullptr != thread)
+					{
+						// thread had soft exit
+						delete thread;
+						thread = nullptr;
+
+						//thread->KillThread();
+					}
+				}
 			}
 			
 		}
@@ -105,6 +125,7 @@ void FConnectThreadPoolThread::Exit()
 {
 	LifecycleStep.Set(3);
 	// cleanup Run() ptr;
+	SafeCleanupQueue();
 	SafeCleanupPool();
 }
 
@@ -136,6 +157,33 @@ void FConnectThreadPoolThread::SafeCleanupPool()
 		ConnectThreadPool.Empty(ConnectThreadPool.GetSlack());
 }
 
+
+void FConnectThreadPoolThread::SafeCleanupQueue()
+{
+	if (DestructQueue.IsEmpty())
+		return;
+	FConnectThread* thread = nullptr;
+	while (DestructQueue.Dequeue(thread))
+	{
+		if (nullptr == thread)
+		{
+			continue;
+		}
+
+		if(!thread->IsExited()) 
+		{
+			// connection->KillThread only called in this class
+			// so if it called, iskilldone must be true(block call)
+			// wait for exit
+			thread->KillThread();
+		}
+
+		// had exited
+		delete thread;
+		thread = nullptr;
+	}
+}
+
 bool FConnectThreadPoolThread::KillThread()
 {
 	if (bKillDone)
@@ -148,11 +196,14 @@ bool FConnectThreadPoolThread::KillThread()
 			// it isn't actively doing work
 			//if(event) event->Trigger();
 
+			Stop();
+
 			// If waiting was specified, wait the amount of time. If that fails,
 			// brute force kill that thread. Very bad as that might leak.
 			Thread->WaitForCompletion();
 
 			SafeCleanupPool();
+			SafeCleanupQueue();
 
 			// Clean up the event
 			// if(event) FPlatformProcess::ReturnSynchEventToPool(event);
@@ -189,6 +240,9 @@ FConnectThreadPoolThread * FConnectThreadPoolThread::Create(int32 InMaxBacklog)
 
 void FConnectThreadPoolThread::SafeHoldThread(FConnectThread * InThread)
 {
+	// pool thread must in run
+	check(2 == LifecycleStep.GetValue());
+
 	if (nullptr != InThread)
 	{
 		FScopeLock lockPool(&ThreadPoolLock);

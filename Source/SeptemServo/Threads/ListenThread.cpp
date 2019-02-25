@@ -12,8 +12,8 @@ FListenThread::FListenThread()
 	, Thread(nullptr)
 	, RankId(0)
 	, ListenerSocket(nullptr)
+	, ConnectionPoolThread(nullptr)
 {
-	ConnectThreadList.Reset(MaxBacklog);
 }
 
 FListenThread::~FListenThread()
@@ -28,12 +28,7 @@ FListenThread::~FListenThread()
 	// null events here
 
 	// cleanup init ptr
-	if (ListenerSocket)
-	{
-		ListenerSocket->Close();
-		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ListenerSocket);
-		ListenerSocket = nullptr;
-	}
+	SafeDestorySocket();
 }
 
 bool FListenThread::Init()
@@ -111,36 +106,11 @@ uint32 FListenThread::Run()
 
 			FPlatformMisc::MemoryBarrier();
 			FConnectThread* connectThread = FConnectThread::Create(ConnectSocket, endPoint.Address, endPoint.Port, RankId);
-			ConnectThreadList.Add(connectThread);
+			ConnectionPoolThread->SafeHoldThread(connectThread);
 			++RankId;
 		}
 		else {
 			UE_LOG(LogTemp, Display, TEXT("ListenerSocket: throw error when pending connection\n"));
-		}
-
-		// remove disconnected client
-		for (int32 i = ConnectThreadList.Num() - 1; i >= 0; --i)
-		{
-			// TODO: FPlatformMisc::MemoryBarrier(); to makesure i
-			if (ConnectThreadList[i] != nullptr)
-			{
-				if (!ConnectThreadList[i]->IsSocketConnection())
-				{
-					// TODO: block listen
-					if (ConnectThreadList[i]->KillThread())	// kill thread
-					{
-						delete ConnectThreadList[i];
-						ConnectThreadList[i] = nullptr;
-
-						// O(1): remove the last hole element and swap with the last element. Don't shrink array!
-						// the rank will not be out of order
-						ConnectThreadList.RemoveAtSwap(i, 1, false);
-					}
-				}
-			}
-			else {
-				ConnectThreadList.RemoveAtSwap(i);
-			}
 		}
 	}
 	//FPlatformMisc::MemoryBarrier();
@@ -157,6 +127,11 @@ void FListenThread::Stop()
 		// because pthread->kill will call stop
 		// IMPORTANT!!!you cannot call pthread->kill here!!!
 
+		if (nullptr != ListenerSocket)
+		{
+			ListenerSocket->Shutdown(ESocketShutdownMode::ReadWrite);
+		}
+
 		bStopped = true;
 	}
 }
@@ -164,28 +139,9 @@ void FListenThread::Stop()
 void FListenThread::Exit()
 {
 	// cleanup socket
-	if (nullptr != ListenerSocket)
-	{
-		delete ListenerSocket;
-		ListenerSocket = nullptr;
-	}
+	SafeDestorySocket();
 
-	// cleanup threads
-	for (int32 i = 0; i < ConnectThreadList.Num(); ++i)
-	{
-		if (nullptr != ConnectThreadList[i])
-		{
-			if (ConnectThreadList[i]->KillThread())
-			{
-				delete ConnectThreadList[i];
-				ConnectThreadList[i] = nullptr;
-			}
-			else {
-				// TODO: kill failed
-				UE_LOG(LogTemp, Display, TEXT("FListenThread: kill thread failed with memory leak in exit()\n"));
-			}
-		}
-	}
+	ConnectionPoolThread->KillThread();
 	UE_LOG(LogTemp, Display, TEXT("FListenThread: exit()\n"));
 }
 
@@ -209,16 +165,12 @@ bool FListenThread::KillThread()
 		// it isn't actively doing work
 		//if(event) event->Trigger();
 
+		Stop();
+
 		// If waiting was specified, wait the amount of time. If that fails,
 		// brute force kill that thread. Very bad as that might leak.
 		Thread->WaitForCompletion();	//block call
 
-		for (int32 i = 0; i < ConnectThreadList.Num(); ++i)
-		{
-			check(ConnectThreadList[i]);
-			ConnectThreadList[i]->KillThread();	//block call
-		}
-		
 		// Clean up the event
 		// if(event) FPlatformProcess::ReturnSynchEventToPool(event);
 		// event = nullptr;
@@ -227,10 +179,7 @@ bool FListenThread::KillThread()
 		delete Thread;
 		Thread = nullptr;
 
-		// close socket
-		//TODO: check socket close
-		ListenerSocket->Shutdown(ESocketShutdownMode::ReadWrite);
-		ListenerSocket->Close();
+		// socket had been safe release in exit();
 	}
 
 	return bDidExit;
@@ -260,32 +209,13 @@ FListenThread * FListenThread::Create(int32 InPort)
 	return runnable;
 }
 
-void FListenThread::CleanupDisconnection()
+void FListenThread::SafeDestorySocket()
 {
-	// remove disconnected client
-	for (int32 i = ConnectThreadList.Num() - 1; i >= 0; --i)
+	if (nullptr != ListenerSocket)
 	{
-		if (ConnectThreadList[i] != nullptr)
-		{
-			if (!ConnectThreadList[i]->IsSocketConnection())
-			{
-				// this fork is disconnected
-				// TODO: block listen
-				if (ConnectThreadList[i]->KillThread())	// kill thread
-				{
-					delete ConnectThreadList[i];
-					ConnectThreadList[i] = nullptr;
-
-					// O(1): remove the last hole element and swap with the last element. Don't shrink array!
-					// the rank will not be out of order
-					ConnectThreadList.RemoveAtSwap(i, 1, false);
-				}
-			}
-		}
-		else {
-			// O(1): remove the last hole element and swap with the last element. Don't shrink array!
-					// the rank will not be out of order
-			ConnectThreadList.RemoveAtSwap(i, 1, false);
-		}
+		ListenerSocket->Close();
+		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ListenerSocket);
+		ListenerSocket = nullptr;
 	}
 }
+
