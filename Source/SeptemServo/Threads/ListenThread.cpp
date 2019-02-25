@@ -91,7 +91,7 @@ uint32 FListenThread::Run()
 			TSharedRef<FInternetAddr> clientAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
 			FIPv4Endpoint endPoint(clientAddr);
 			// accept with description = client {Rank Id}
-			FSocket* ConnectSocket = ListenerSocket->Accept(*clientAddr, FString::Printf(TEXT("ConnectSocket%d"), RankId));
+			FSocket* ConnectSocket = ListenerSocket->Accept(*clientAddr, FString::Printf(TEXT("ListenServer%d"), RankId));
 
 			if(nullptr == ConnectSocket)
 			{
