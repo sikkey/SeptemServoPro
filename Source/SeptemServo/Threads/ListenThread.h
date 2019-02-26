@@ -65,5 +65,6 @@ private:
 	int32 RankId;	// consider volatile 
 
 	FConnectThreadPoolThread* ConnectionPoolThread;
-
+	void SafeConstructConnectionPool();
+	void SafeDestructConnectionPool();
 };
