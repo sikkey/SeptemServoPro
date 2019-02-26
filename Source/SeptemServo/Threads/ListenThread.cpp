@@ -65,6 +65,9 @@ bool FListenThread::Init()
 
 	UE_LOG(LogTemp, Display, TEXT("ListenerSocket: server listening\n"));
 
+	// <----- insert:  create connection pool
+	SafeConstructConnectionPool();
+
 	// 4. accept client
 	// 5. recv data
 	// accept&recv task in Run()
@@ -89,7 +92,6 @@ uint32 FListenThread::Run()
 			//FPlatformMisc::MemoryBarrier();
 
 			TSharedRef<FInternetAddr> clientAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
-			FIPv4Endpoint endPoint(clientAddr);
 			// accept with description = client {Rank Id}
 			FSocket* ConnectSocket = ListenerSocket->Accept(*clientAddr, FString::Printf(TEXT("ListenServer%d"), RankId));
 
@@ -105,9 +107,16 @@ uint32 FListenThread::Run()
 			ConnectSocket->SetNonBlocking(true);
 
 			FPlatformMisc::MemoryBarrier();
+			FIPv4Endpoint endPoint(clientAddr);
+
+			UE_LOG(LogTemp, Display, TEXT("ListenerSocket: accept client ip = %s \n"), *endPoint.ToString());
+
 			FConnectThread* connectThread = FConnectThread::Create(ConnectSocket, endPoint.Address, endPoint.Port, RankId);
-			ConnectionPoolThread->SafeHoldThread(connectThread);
-			++RankId;
+			if (connectThread != nullptr)
+			{
+				ConnectionPoolThread->SafeHoldThread(connectThread);
+				++RankId;
+			}
 		}
 		else {
 			UE_LOG(LogTemp, Display, TEXT("ListenerSocket: throw error when pending connection\n"));
@@ -141,7 +150,7 @@ void FListenThread::Exit()
 	// cleanup socket
 	SafeDestorySocket();
 
-	ConnectionPoolThread->KillThread();
+	SafeDestructConnectionPool();
 	UE_LOG(LogTemp, Display, TEXT("FListenThread: exit()\n"));
 }
 
@@ -216,6 +225,23 @@ void FListenThread::SafeDestorySocket()
 		ListenerSocket->Close();
 		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ListenerSocket);
 		ListenerSocket = nullptr;
+	}
+}
+
+void FListenThread::SafeConstructConnectionPool()
+{
+	if (nullptr == ConnectionPoolThread)
+	{ 
+		ConnectionPoolThread = FConnectThreadPoolThread::Create(MaxBacklog);
+		UE_LOG(LogTemp, Display, TEXT("ListenerSocket: init connection pool \n"));
+	}
+}
+
+void FListenThread::SafeDestructConnectionPool()
+{
+	if (nullptr != ConnectionPoolThread)
+	{
+		ConnectionPoolThread->KillThread();
 	}
 }
 
