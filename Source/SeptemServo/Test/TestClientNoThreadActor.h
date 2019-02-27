@@ -37,6 +37,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Actor)
 		bool bStartGameConnect;
 
+	//0: disconnect
+	//1: connect
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Actor)
+		int32 ClientState;
+
 	FIPv4Endpoint ServerEndPoint;
 
 	FSocket* ClientSocket;

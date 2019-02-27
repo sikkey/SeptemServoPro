@@ -102,6 +102,8 @@ uint32 FListenThread::Run()
 				return 1ui32;
 			}
 
+			UE_LOG(LogTemp, Display, TEXT("ListenerSocket: connect socket ptr = %d  ip =  %s\n"), ConnectSocket, *FIPv4Endpoint(clientAddr).ToString());
+
 			//check(ConnectSocket && "ConnectSocket == nullptr");
 			// connectThread will hold the ConnectSocket ptr, Don't care about it in this thread
 			ConnectSocket->SetNonBlocking(true);
@@ -147,10 +149,9 @@ void FListenThread::Stop()
 
 void FListenThread::Exit()
 {
+	SafeDestructConnectionPool();
 	// cleanup socket
 	SafeDestorySocket();
-
-	SafeDestructConnectionPool();
 	UE_LOG(LogTemp, Display, TEXT("FListenThread: exit()\n"));
 }
 
@@ -242,6 +243,7 @@ void FListenThread::SafeDestructConnectionPool()
 	if (nullptr != ConnectionPoolThread)
 	{
 		ConnectionPoolThread->KillThread();
+		UE_LOG(LogTemp, Display, TEXT("ListenerSocket: Destruct connection pool \n"));
 	}
 }
 

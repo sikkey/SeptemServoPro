@@ -44,7 +44,7 @@ bool FConnectThread::Init()
 {
 	LifecycleStep.Set(1);
 	// if init success, return true here
-	return false;
+	return true;
 }
 
 uint32 FConnectThread::Run()
@@ -55,7 +55,11 @@ uint32 FConnectThread::Run()
 	int32 BytesRead = 0;
 	bool bRcev = false;
 
-	if (nullptr == ConnectSocket) return 1ui32;  //exit code == 1 : thread run failed
+	if (nullptr == ConnectSocket)
+	{
+		return 1ui32;  //exit code == 1 : thread run failed
+	}
+
 	while (!TimeToDie)
 	{
 		if (ConnectSocket->HasPendingData(pendingDataSize) && pendingDataSize > 0)
@@ -187,12 +191,15 @@ FConnectThread * FConnectThread::Create(FSocket * InSocket, FIPv4Address & InIP,
 bool FConnectThread::IsSocketConnection()
 {
 	if (ConnectSocket)
-	{
+	{	// TODO: FIX BUG cause fatal error here, address = 0xffffffff
 		if (ConnectSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
 		{
 			return true;
 		}
 	}
+
+	UE_LOG(LogTemp, Display, TEXT("FConnectThread: detect disconnect\n"));
+
 	return false;
 }
 

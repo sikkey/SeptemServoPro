@@ -82,20 +82,20 @@ uint32 FConnectThreadPoolThread::Run()
 		}
 
 		// soft clean the queue
-		FConnectThread* thread = nullptr;
-		if (DestructQueue.Peek(thread))
+		FConnectThread* t_thread = nullptr;
+		if (DestructQueue.Peek(t_thread))
 		{
-			if (nullptr == thread || thread->IsExited())
+			if (nullptr == t_thread || t_thread->IsExited())
 			{
-				if (DestructQueue.Dequeue(thread))
+				if (DestructQueue.Dequeue(t_thread))
 				{
-					if (nullptr != thread)
+					if (nullptr != t_thread)
 					{
-						// thread had soft exit
-						delete thread;
-						thread = nullptr;
+						// t_thread had soft exit
+						delete t_thread;
+						t_thread = nullptr;
 
-						//thread->KillThread();
+						//t_thread->KillThread();
 					}
 				}
 			}
@@ -127,6 +127,8 @@ void FConnectThreadPoolThread::Exit()
 	// cleanup Run() ptr;
 	SafeCleanupQueue();
 	SafeCleanupPool();
+
+	UE_LOG(LogTemp, Display, TEXT("FConnectThreadPoolThread: exit()\n"));
 }
 
 void FConnectThreadPoolThread::SafeCleanupPool()
@@ -186,21 +188,22 @@ void FConnectThreadPoolThread::SafeCleanupQueue()
 
 bool FConnectThreadPoolThread::KillThread()
 {
-	if (bKillDone)
+	if (!bKillDone)
 	{
 		TimeToDie = true;
-
+		UE_LOG(LogTemp, Display, TEXT("FConnectThreadPoolThread: begin kill thread \n"));
 		if (nullptr != Thread)
 		{
 			// Trigger the thread so that it will come out of the wait state if
 			// it isn't actively doing work
 			//if(event) event->Trigger();
-
+			UE_LOG(LogTemp, Display, TEXT("FConnectThreadPoolThread: stop \n"));
 			Stop();
-
+			UE_LOG(LogTemp, Display, TEXT("FConnectThreadPoolThread: wait exit \n"));
 			// If waiting was specified, wait the amount of time. If that fails,
 			// brute force kill that thread. Very bad as that might leak.
 			Thread->WaitForCompletion();
+			UE_LOG(LogTemp, Display, TEXT("FConnectThreadPoolThread: cleanup pools \n"));
 
 			SafeCleanupPool();
 			SafeCleanupQueue();

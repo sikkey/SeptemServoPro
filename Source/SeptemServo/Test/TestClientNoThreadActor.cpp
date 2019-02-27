@@ -18,7 +18,8 @@ ATestClientNoThreadActor::ATestClientNoThreadActor()
 	ServerEndPoint.Port = Port;
 
 	ClientSocket = nullptr;
-	bStartGameConnect = true;
+	bStartGameConnect = false;
+	ClientState = 0;
 }
 
 // Called when the game starts or when spawned
@@ -48,18 +49,24 @@ void ATestClientNoThreadActor::Tick(float DeltaTime)
 
 void ATestClientNoThreadActor::ConnectToServer()
 {
-	// 1. create socket
-	ClientSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("ClientNoThread"), false);
-
-	// 2. connect socket
-	TSharedRef<FInternetAddr> addr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr(ServerEndPoint.Address.Value, ServerEndPoint.Port);
-	bool bConnect = ClientSocket->Connect(*addr);
-
-	if (!bConnect)
+	if (nullptr == ClientSocket)
 	{
-		UE_LOG(LogTemp, Display, TEXT("ATestClientNoThreadActor: connect to server failed! \n"));
-		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ClientSocket);
-		ClientSocket = nullptr;
+		// 1. create socket
+		ClientSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("ClientNoThread"), false);
+
+		// 2. connect socket
+		TSharedRef<FInternetAddr> addr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr(ServerEndPoint.Address.Value, ServerEndPoint.Port);
+		bool bConnect = ClientSocket->Connect(*addr);
+
+		if (!bConnect)
+		{
+			UE_LOG(LogTemp, Display, TEXT("ATestClientNoThreadActor: connect to server failed! \n"));
+			ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ClientSocket);
+			ClientSocket = nullptr;
+		}
+		else {
+			ClientState = 1;
+		}
 	}
 }
 
@@ -76,6 +83,8 @@ void ATestClientNoThreadActor::ReleaseSocket()
 		ClientSocket->Close();
 		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ClientSocket);
 		ClientSocket = nullptr;
+
+		UE_LOG(LogTemp, Display, TEXT("ATestClientNoThreadActor: client socket close \n"));
 	}
 }
 
