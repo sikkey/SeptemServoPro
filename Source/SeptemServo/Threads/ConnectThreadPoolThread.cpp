@@ -4,12 +4,14 @@
 
 FConnectThreadPoolThread::FConnectThreadPoolThread()
 	:FRunnable()
+	,TimeToDie(false)
 {
 	ConnectThreadPool.Reset(101);
 }
 
 FConnectThreadPoolThread::FConnectThreadPoolThread(int32 InMaxBacklog)
 	: FRunnable()
+	,TimeToDie(false)
 {
 	ConnectThreadPool.Reset(InMaxBacklog + 1);
 }

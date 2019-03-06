@@ -78,7 +78,7 @@ private:
 	// thread control
 	//---------------------------------------------
 
-	/** If true, the thread should exit. */
+	/** If true, the thread should exit.  Must construct*/
 	TAtomic<bool> TimeToDie;
 
 	// if ture means we had called stop();

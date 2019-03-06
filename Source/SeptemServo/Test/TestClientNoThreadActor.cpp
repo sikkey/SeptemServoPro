@@ -55,8 +55,8 @@ void ATestClientNoThreadActor::ConnectToServer()
 		ClientSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("ClientNoThread"), false);
 
 		// 2. connect socket
-		TSharedRef<FInternetAddr> addr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr(ServerEndPoint.Address.Value, ServerEndPoint.Port);
-		bool bConnect = ClientSocket->Connect(*addr);
+		TSharedRef<FInternetAddr> ServerAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr(ServerEndPoint.Address.Value, ServerEndPoint.Port);
+		bool bConnect = ClientSocket->Connect(*ServerAddr);
 
 		if (!bConnect)
 		{
@@ -99,7 +99,26 @@ void ATestClientNoThreadActor::SendByte(uint8 InByte)
 		buffer.Add(InByte);
 		if (ClientSocket->Send(buffer.GetData(), buffer.Num(), bytesSend))
 		{
-			UE_LOG(LogTemp, Display, TEXT("ATestClientNoThreadActor: socket send done. \n"));
+			UE_LOG(LogTemp, Display, TEXT("ATestClientNoThreadActor: socket send  %d bytes done. buffer num = %d \n"), bytesSend, buffer.Num());
+		}
+	}
+}
+
+void ATestClientNoThreadActor::SendByteUDP(uint8 InByte)
+{
+	if (ClientSocket)
+	{
+		int32 bytesSend = 0;
+		static TArray<uint8> buffer;
+
+		buffer.Reset(10 * 1024 * 1024);
+		buffer.Add(InByte);
+
+		TSharedRef<FInternetAddr> ServerAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr(ServerEndPoint.Address.Value, ServerEndPoint.Port);
+
+		if (ClientSocket->SendTo(buffer.GetData(), buffer.Num(), bytesSend, *ServerAddr))
+		{
+			UE_LOG(LogTemp, Display, TEXT("ATestClientNoThreadActor: socket udp send done. \n"));
 		}
 	}
 }

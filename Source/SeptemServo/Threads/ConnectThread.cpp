@@ -11,6 +11,7 @@ FConnectThread::FConnectThread()
 	, ClientIPAdress(0ui32)
 	, Port(3717)
 	, RankId(0)
+	, TimeToDie(false)
 {
 	ReceivedData.Reset(MaxReceivedCount);
 }
@@ -21,6 +22,7 @@ FConnectThread::FConnectThread(FSocket * InSocket, FIPv4Address & InIP, int32 In
 	, ClientIPAdress(InIP)
 	, Port(InPort)
 	, RankId(InRank)
+	, TimeToDie(false)
 {
 	ReceivedData.Reset(MaxReceivedCount);
 }
@@ -95,6 +97,7 @@ uint32 FConnectThread::Run()
 
 void FConnectThread::Stop()
 {
+	UE_LOG(LogTemp, Display, TEXT("FConnectThread: call stop!!!\n"));
 	if (!bStopped) {
 		TimeToDie = true;
 		// call father function
@@ -124,6 +127,7 @@ void FConnectThread::Exit()
 
 bool FConnectThread::KillThread()
 {
+	UE_LOG(LogTemp, Display, TEXT("FConnectThread: call kill!!!\n"));
 	// bKillDone maybe 0
 	if (1 == bKillDone.Increment()) {
 		// bKillDone at least 1, thread safe
@@ -196,8 +200,15 @@ bool FConnectThread::IsSocketConnection()
 		{
 			return true;
 		}
+		else {
+			UE_LOG(LogTemp, Display, TEXT("FConnectThread: connect socket's state is not SCS_Connected\n"));
+		}
 	}
 
+	if (ConnectSocket == nullptr)
+	{
+		UE_LOG(LogTemp, Display, TEXT("FConnectThread: socket = null\n"));
+	}
 	UE_LOG(LogTemp, Display, TEXT("FConnectThread: detect disconnect\n"));
 
 	return false;

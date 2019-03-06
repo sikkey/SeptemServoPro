@@ -58,4 +58,7 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Client")
 		void SendByte(uint8 InByte);
+
+	UFUNCTION(BlueprintCallable, Category = "Client")
+		void SendByteUDP(uint8 InByte);
 };

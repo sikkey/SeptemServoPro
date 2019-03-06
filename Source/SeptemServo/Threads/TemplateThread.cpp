@@ -5,6 +5,7 @@
 FTemplateThread::FTemplateThread()
 	:FRunnable()
 	, bKillDone(false)
+	, TimeToDie(false)
 {
 }
 
