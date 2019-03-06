@@ -83,7 +83,7 @@ void ATestClientNoThreadActor::ReleaseSocket()
 		ClientSocket->Close();
 		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ClientSocket);
 		ClientSocket = nullptr;
-
+		ClientState = 0;
 		UE_LOG(LogTemp, Display, TEXT("ATestClientNoThreadActor: client socket close \n"));
 	}
 }
@@ -95,7 +95,7 @@ void ATestClientNoThreadActor::SendByte(uint8 InByte)
 		int32 bytesSend = 0;
 		static TArray<uint8> buffer;
 		
-		buffer.Reset(10*1024*1024);
+		buffer.Reset(1024);
 		buffer.Add(InByte);
 		if (ClientSocket->Send(buffer.GetData(), buffer.Num(), bytesSend))
 		{
@@ -111,7 +111,7 @@ void ATestClientNoThreadActor::SendByteUDP(uint8 InByte)
 		int32 bytesSend = 0;
 		static TArray<uint8> buffer;
 
-		buffer.Reset(10 * 1024 * 1024);
+		buffer.Reset(1024);
 		buffer.Add(InByte);
 
 		TSharedRef<FInternetAddr> ServerAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr(ServerEndPoint.Address.Value, ServerEndPoint.Port);

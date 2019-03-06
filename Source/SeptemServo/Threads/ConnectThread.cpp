@@ -69,11 +69,14 @@ uint32 FConnectThread::Run()
 			BytesRead = 0;
 			bRcev = false;
 
-			bRcev = ConnectSocket->Recv(ReceivedData.GetData(), ReceivedData.Num(), BytesRead, ESocketReceiveFlags::None);
+			// read all buffer
+			ReceivedData.SetNumUninitialized(pendingDataSize);
+			// Attention: ReceivedData.Num must >= pendingDataSize
+			bRcev = ConnectSocket->Recv(ReceivedData.GetData(), ReceivedData.Num(), BytesRead);
 
 			if (bRcev && BytesRead > 0)
 			{
-				if (BytesRead == ReceivedData.Num())
+				if (BytesRead > ReceivedData.Num())
 				{
 					UE_LOG(LogTemp, Display, TEXT("[Warnning]FConnectThread: receive stack overflow!\n"));
 					//TODO: stack overflow
@@ -81,11 +84,12 @@ uint32 FConnectThread::Run()
 				}
 
 				// TODO: recv data
-				UE_LOG(LogTemp, Display, TEXT("FConnectThread: receive chars = %s length = %d\n"), ReceivedData.GetData(), ReceivedData.Num());
+				UE_LOG(LogTemp, Display, TEXT("FConnectThread: receive byte = %d length = %d\n"), ReceivedData.GetData()[0], ReceivedData.Num());
 			}
-
-			// TODO: do with no pending data
-			UE_LOG(LogTemp, Display, TEXT("FConnectThread: no pending data!!!\n"));
+			else {
+				//Error: pendingDataSize>0 Rcev failed
+				UE_LOG(LogTemp, Display, TEXT("FConnectThread: pending data size > 0, rcev failed. Check the length of ReceivedData.Num()"));
+			}
 			
 			// TODO: check disconnect
 		}
