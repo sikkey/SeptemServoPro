@@ -72,6 +72,16 @@ int32 ATestServerActor::GetServerLifecycle()
 	return 0;
 }
 
+int32 ATestServerActor::GetRankID()
+{
+	if (ServerThread)
+	{
+		return ServerThread->GetRankID();
+	}
+
+	return 0;
+}
+
 int32 ATestServerActor::GetConnectPoolLifecycle()
 {
 	if (ServerThread)
@@ -79,6 +89,20 @@ int32 ATestServerActor::GetConnectPoolLifecycle()
 		return ServerThread->GetPoolLifecycleStep();
 	}
 
+	return 0;
+}
+
+int32 ATestServerActor::GetConnectPoolLength()
+{
+	if (ServerThread)
+	{
+		FConnectThreadPoolThread* poolThread = ServerThread->GetPoolThread();
+
+		if (poolThread)
+		{
+			return poolThread->GetPoolLength();
+		}
+	}
 	return 0;
 }
 

@@ -242,6 +242,11 @@ FConnectThreadPoolThread * FListenThread::GetPoolThread()
 	return ConnectionPoolThread;
 }
 
+int32 FListenThread::GetRankID()
+{
+	return RankId;
+}
+
 void FListenThread::SafeDestorySocket()
 {
 	if (nullptr != ListenerSocket)

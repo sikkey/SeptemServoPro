@@ -41,7 +41,14 @@ public:
 		int32 GetServerLifecycle();
 
 	UFUNCTION(BlueprintCallable, Category = "Server")
+		int32 GetRankID();
+
+	UFUNCTION(BlueprintCallable, Category = "Server")
 		int32 GetConnectPoolLifecycle();
+
+	/* not thread-safe may cause crash */
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		int32 GetConnectPoolLength();
 
 public:
 	//		server settings

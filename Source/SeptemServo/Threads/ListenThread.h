@@ -36,6 +36,7 @@ public:
 
 	// [Dangerous call] only for debug info
 	FConnectThreadPoolThread* GetPoolThread();
+	int32 GetRankID();
 private:
 	//---------------------------------------------
 	// thread control
