@@ -62,4 +62,24 @@ void ATestServerActor::ShutdownServer()
 	}
 }
 
+int32 ATestServerActor::GetServerLifecycle()
+{
+	if (ServerThread)
+	{
+		return ServerThread->GetLifecycleStep();
+	}
+
+	return 0;
+}
+
+int32 ATestServerActor::GetConnectPoolLifecycle()
+{
+	if (ServerThread)
+	{
+		return ServerThread->GetPoolLifecycleStep();
+	}
+
+	return 0;
+}
+
 

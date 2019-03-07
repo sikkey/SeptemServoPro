@@ -260,3 +260,14 @@ bool FConnectThreadPoolThread::IsKillDone()
 	bool ret = bKillDone;
 	return ret;
 }
+
+int32 FConnectThreadPoolThread::GetLifecycleStep()
+{
+	return LifecycleStep.GetValue();
+}
+
+int32 FConnectThreadPoolThread::GetPoolLength()
+{
+	FScopeLock lockPool(&ThreadPoolLock);
+	return ConnectThreadPool.Num();
+}

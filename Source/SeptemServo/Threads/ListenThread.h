@@ -31,6 +31,11 @@ public:
 	bool KillThread();// use KillThread instead of thread->kill
 	static FListenThread* Create(int32 InPort = 3717);
 
+	int32 GetLifecycleStep();
+	int32 GetPoolLifecycleStep();
+
+	// [Dangerous call] only for debug info
+	FConnectThreadPoolThread* GetPoolThread();
 private:
 	//---------------------------------------------
 	// thread control
@@ -41,6 +46,8 @@ private:
 
 	// if ture means we had called stop();
 	FThreadSafeBool bStopped; // check stop()
+
+	FThreadSafeCounter LifecycleStep;
 	//TAtomic<bool> bPause;  //or FThreadSafeBool bPause;
 	//FEvent * Semaphore;
 

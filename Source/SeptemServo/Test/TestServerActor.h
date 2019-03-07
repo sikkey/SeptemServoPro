@@ -37,6 +37,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Server")
 		void ShutdownServer();
 
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		int32 GetServerLifecycle();
+
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		int32 GetConnectPoolLifecycle();
+
 public:
 	//		server settings
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Actor)

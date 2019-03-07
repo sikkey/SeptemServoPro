@@ -33,8 +33,9 @@ FListenThread::~FListenThread()
 
 bool FListenThread::Init()
 {
+	LifecycleStep.Set(1);
 	// do network 
-
+	
 	// 1. create socket
 	ListenerSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("listen socket"), false);
 	//check(ListenerSocket);
@@ -76,6 +77,7 @@ bool FListenThread::Init()
 
 uint32 FListenThread::Run()
 {
+	LifecycleStep.Set(2);
 	bool bHasPendingConnection = false;
 	if (nullptr == ListenerSocket) return 1ui32;  //exit code == 1 : thread run failed
 	while (!TimeToDie)
@@ -149,10 +151,12 @@ void FListenThread::Stop()
 
 void FListenThread::Exit()
 {
+	LifecycleStep.Set(3);
 	SafeDestructConnectionPool();
 	// cleanup socket
 	SafeDestorySocket();
 	UE_LOG(LogTemp, Display, TEXT("FListenThread: exit()\n"));
+	LifecycleStep.Set(4);
 }
 
 /**
@@ -217,6 +221,25 @@ FListenThread * FListenThread::Create(int32 InPort)
 	// setting thread
 	runnable->Thread = thread;
 	return runnable;
+}
+
+int32 FListenThread::GetLifecycleStep()
+{
+	return LifecycleStep.GetValue();
+}
+
+int32 FListenThread::GetPoolLifecycleStep()
+{
+	if (ConnectionPoolThread)
+	{
+		return ConnectionPoolThread->GetLifecycleStep();
+	}
+	return 0;
+}
+
+FConnectThreadPoolThread * FListenThread::GetPoolThread()
+{
+	return ConnectionPoolThread;
 }
 
 void FListenThread::SafeDestorySocket()

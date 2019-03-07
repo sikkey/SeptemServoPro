@@ -71,5 +71,8 @@ public:
 
 	// state
 	bool IsKillDone();
+	int32 GetLifecycleStep();
 
+	// debug info
+	int32 GetPoolLength();
 };
