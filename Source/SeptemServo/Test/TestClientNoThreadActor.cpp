@@ -45,6 +45,14 @@ void ATestClientNoThreadActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (nullptr != ClientSocket)
+	{
+		// detect server is connect
+		if (ClientSocket->GetConnectionState() != ESocketConnectionState::SCS_Connected)
+		{
+			// safe disconnect
+		}
+	}
 }
 
 void ATestClientNoThreadActor::ConnectToServer()
