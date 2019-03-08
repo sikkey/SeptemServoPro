@@ -56,6 +56,7 @@ private:
 	void SafeCleanupPool();
 	void SafeCleanupQueue();
 
+	float SleepTimeSpan;
 public:
 	//-------------------------------------------------------------------
 	// Critical Lock Call By Another Thread
