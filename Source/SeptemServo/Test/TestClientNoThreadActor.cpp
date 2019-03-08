@@ -51,6 +51,7 @@ void ATestClientNoThreadActor::Tick(float DeltaTime)
 		if (ClientSocket->GetConnectionState() != ESocketConnectionState::SCS_Connected)
 		{
 			// safe disconnect
+			ReleaseSocket();
 		}
 	}
 }
@@ -109,6 +110,9 @@ void ATestClientNoThreadActor::SendByte(uint8 InByte)
 		{
 			UE_LOG(LogTemp, Display, TEXT("ATestClientNoThreadActor: socket send  %d bytes done. buffer num = %d \n"), bytesSend, buffer.Num());
 		}
+		else {
+			ReleaseSocket();
+		}
 	}
 }
 
@@ -127,6 +131,9 @@ void ATestClientNoThreadActor::SendByteUDP(uint8 InByte)
 		if (ClientSocket->SendTo(buffer.GetData(), buffer.Num(), bytesSend, *ServerAddr))
 		{
 			UE_LOG(LogTemp, Display, TEXT("ATestClientNoThreadActor: socket udp send done. \n"));
+		}
+		else {
+			ReleaseSocket();
 		}
 	}
 }
