@@ -13,6 +13,7 @@ FListenThread::FListenThread()
 	, RankId(0)
 	, ListenerSocket(nullptr)
 	, ConnectionPoolThread(nullptr)
+	, PoolTimespan(0)
 {
 }
 
@@ -199,7 +200,7 @@ bool FListenThread::KillThread()
 	return bDidExit;
 }
 
-FListenThread * FListenThread::Create(int32 InPort)
+FListenThread * FListenThread::Create(int32 InPort, float InPoolTimespan)
 {
 	// if you need create event
 	//Event = FPlatformProcess::GetSynchEventFromPool();
@@ -207,6 +208,7 @@ FListenThread * FListenThread::Create(int32 InPort)
 	// create runnable
 	FListenThread* runnable = new FListenThread();
 	runnable->Port = InPort;
+	runnable->PoolTimespan = InPoolTimespan;
 
 	// create thread with runnable
 	FRunnableThread* thread = FRunnableThread::Create(runnable, TEXT("FListenThread"), 0, TPri_BelowNormal); //windows default = 8mb for thread, could specify 
@@ -261,7 +263,7 @@ void FListenThread::SafeConstructConnectionPool()
 {
 	if (nullptr == ConnectionPoolThread)
 	{ 
-		ConnectionPoolThread = FConnectThreadPoolThread::Create(MaxBacklog);
+		ConnectionPoolThread = FConnectThreadPoolThread::Create(MaxBacklog, PoolTimespan);
 		UE_LOG(LogTemp, Display, TEXT("ListenerSocket: init connection pool \n"));
 	}
 }

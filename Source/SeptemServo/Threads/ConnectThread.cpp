@@ -64,6 +64,7 @@ uint32 FConnectThread::Run()
 
 	while (!TimeToDie)
 	{
+		FPlatformProcess::Sleep(0.01f);
 		if (ConnectSocket->HasPendingData(pendingDataSize) && pendingDataSize > 0)
 		{
 			BytesRead = 0;

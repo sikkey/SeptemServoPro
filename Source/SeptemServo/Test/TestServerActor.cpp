@@ -12,6 +12,10 @@ ATestServerActor::ATestServerActor()
 	bListenInit = true;
 
 	ServerThread = nullptr;
+
+	PoolTimespan = 0.05f;
+
+	bCleanup = true;
 }
 
 // Called when the game starts or when spawned
@@ -47,7 +51,7 @@ void ATestServerActor::RunServer(bool bRestart)
 
 	if (nullptr == ServerThread)
 	{
-		ServerThread = FListenThread::Create();
+		ServerThread = FListenThread::Create(Port, PoolTimespan);
 	}
 }
 
@@ -104,6 +108,41 @@ int32 ATestServerActor::GetConnectPoolLength()
 		}
 	}
 	return 0;
+}
+
+float ATestServerActor::GetPoolTimespan()
+{
+	return PoolTimespan;
+}
+
+void ATestServerActor::SetPoolTimespan(float InTimespan)
+{
+	PoolTimespan = InTimespan;
+	if (ServerThread)
+	{
+		FConnectThreadPoolThread* poolThread = ServerThread->GetPoolThread();
+		if (poolThread)
+		{
+			poolThread->SetCleanupTimespan(InTimespan);
+			PoolTimespan = poolThread->GetCleanupTimespan();
+		}
+	}
+}
+
+void ATestServerActor::SetNeedCleanup(bool InNeedCleanup)
+{
+	bCleanup = InNeedCleanup;
+
+	if (ServerThread)
+	{
+		FConnectThreadPoolThread* poolThread = ServerThread->GetPoolThread();
+		if (poolThread)
+		{
+			UE_LOG(LogTemp, Display, TEXT("ATestServerActor: pool cleanup state change"));
+			poolThread->bCleanup = InNeedCleanup;
+			bCleanup = poolThread->bCleanup;
+		}
+	}
 }
 
 

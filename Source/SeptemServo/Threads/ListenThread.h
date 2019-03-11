@@ -7,7 +7,7 @@
 #include "Networking.h"
 #include "ConnectThreadPoolThread.h"
 
-/**
+ /**
  * litsen runnable for server thread
  */
 class SEPTEMSERVO_API FListenThread : public FRunnable
@@ -29,7 +29,7 @@ public:
 	// must use KillThread to void deadlock
 	// if you use thread->kill() directly , easy to get deadlock or crash
 	bool KillThread();// use KillThread instead of thread->kill
-	static FListenThread* Create(int32 InPort = 3717);
+	static FListenThread* Create(int32 InPort = 3717, float InPoolTimespan = 0.05f);
 
 	int32 GetLifecycleStep();
 	int32 GetPoolLifecycleStep();
@@ -59,6 +59,7 @@ private:
 	FIPv4Address IPAdress;
 	int32 Port;
 	int32 MaxBacklog;				// max count of client
+	float PoolTimespan;
 
 	// socket
 	FSocket* ListenerSocket;

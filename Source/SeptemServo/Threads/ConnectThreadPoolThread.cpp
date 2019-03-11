@@ -6,6 +6,7 @@ FConnectThreadPoolThread::FConnectThreadPoolThread()
 	:FRunnable()
 	,TimeToDie(false)
 	, SleepTimeSpan(0)
+	, bCleanup(true)
 {
 	ConnectThreadPool.Reset(101);
 }
@@ -14,6 +15,7 @@ FConnectThreadPoolThread::FConnectThreadPoolThread(int32 InMaxBacklog)
 	: FRunnable()
 	,TimeToDie(false)
 	, SleepTimeSpan(0)
+	, bCleanup(true)
 {
 	ConnectThreadPool.Reset(InMaxBacklog + 1);
 }
@@ -58,53 +60,58 @@ uint32 FConnectThreadPoolThread::Run()
 	// [Warnning] Mustn't use bStopped here!
 	while(!TimeToDie)
 	{
-		// remove disconnected client
-		for (int32 i = ConnectThreadPool.Num() - 1; i >= 0; --i)
-		{
-			if (nullptr != ConnectThreadPool[i])
+		FPlatformProcess::Sleep(SleepTimeSpan);
+
+		if (bCleanup) {
+			// remove disconnected client
+			for (int32 i = ConnectThreadPool.Num() - 1; i >= 0; --i)
 			{
-				if (!ConnectThreadPool[i]->IsSocketConnection())
+				if (nullptr != ConnectThreadPool[i])
 				{
-					// soft kill:
-					// 1. stop to let the thread exit by itself
-					// 2. add the thread ptr to destruct queue
-					// 3. wait & clean the queue outside
-					ConnectThreadPool[i]->Stop();
-					// enqueue to the wait to clean queue .  thread-safe
-					DestructQueue.Enqueue(ConnectThreadPool[i]);
-					// the ptr had been hold in DestructQueue, don't need delete
-					//ConnectThreadPool[i] = nullptr;
-					// O(1): remove the last hole element and swap with the last element. Don't shrink array!
-					// the rank will not be out of order
+					if (!ConnectThreadPool[i]->IsSocketConnection())
+					{
+						// soft kill:
+						// 1. stop to let the thread exit by itself
+						// 2. add the thread ptr to destruct queue
+						// 3. wait & clean the queue outside
+						ConnectThreadPool[i]->Stop();
+						// enqueue to the wait to clean queue .  thread-safe
+						DestructQueue.Enqueue(ConnectThreadPool[i]);
+						// the ptr had been hold in DestructQueue, don't need delete
+						//ConnectThreadPool[i] = nullptr;
+						// O(1): remove the last hole element and swap with the last element. Don't shrink array!
+						// the rank will not be out of order
+						ConnectThreadPool.RemoveAtSwap(i, 1, false);
+					}
+				}
+				else {
+					// nullptr
 					ConnectThreadPool.RemoveAtSwap(i, 1, false);
 				}
 			}
-			else {
-				// nullptr
-				ConnectThreadPool.RemoveAtSwap(i, 1, false);
-			}
-		}
 
-		// soft clean the queue
-		FConnectThread* t_thread = nullptr;
-		if (DestructQueue.Peek(t_thread))
-		{
-			if (nullptr == t_thread || t_thread->IsExited())
+			// soft clean the queue
+			FConnectThread* t_thread = nullptr;
+			if (DestructQueue.Peek(t_thread))
 			{
-				if (DestructQueue.Dequeue(t_thread))
+				if (nullptr == t_thread || t_thread->IsExited())
 				{
-					if (nullptr != t_thread)
+					if (DestructQueue.Dequeue(t_thread))
 					{
-						// t_thread had soft exit
-						delete t_thread;
-						t_thread = nullptr;
+						if (nullptr != t_thread)
+						{
+							// t_thread had soft exit
+							delete t_thread;
+							t_thread = nullptr;
 
-						//t_thread->KillThread();
+							//t_thread->KillThread();
+						}
 					}
 				}
+
 			}
-			
 		}
+		
 	}
 
 	// ExitCode:0 means no error
@@ -227,9 +234,11 @@ bool FConnectThreadPoolThread::KillThread()
 	return bKillDone;
 }
 
-FConnectThreadPoolThread * FConnectThreadPoolThread::Create(int32 InMaxBacklog)
+FConnectThreadPoolThread * FConnectThreadPoolThread::Create(int32 InMaxBacklog, float InPoolTimespan)
 {
 	FConnectThreadPoolThread* runnable = new FConnectThreadPoolThread(InMaxBacklog);
+
+	runnable->SleepTimeSpan = InPoolTimespan;
 	
 	// create thread with runnable
 	FRunnableThread* thread = FRunnableThread::Create(runnable, TEXT("FConnectThreadPoolThread"), 0, TPri_BelowNormal); //windows default = 8mb for thread, could specify 
@@ -272,4 +281,14 @@ int32 FConnectThreadPoolThread::GetPoolLength()
 {
 	FScopeLock lockPool(&ThreadPoolLock);
 	return ConnectThreadPool.Num();
+}
+
+void FConnectThreadPoolThread::SetCleanupTimespan(float InTimespan)
+{
+	SleepTimeSpan = InTimespan;
+}
+
+float FConnectThreadPoolThread::GetCleanupTimespan()
+{
+	return SleepTimeSpan;
 }

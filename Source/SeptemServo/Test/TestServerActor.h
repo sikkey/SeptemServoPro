@@ -50,6 +50,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Server")
 		int32 GetConnectPoolLength();
 
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		float GetPoolTimespan();
+
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		void SetPoolTimespan(float InTimespan);
+
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		void SetNeedCleanup(bool InNeedCleanup);
+
 public:
 	//		server settings
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Actor)
@@ -57,4 +66,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Actor)
 		bool bListenInit;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Actor)
+		float PoolTimespan;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Actor)
+		bool bCleanup;
 };
