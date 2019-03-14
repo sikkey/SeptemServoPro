@@ -25,7 +25,7 @@ struct FSNetBufferHead
 	uint8 fastcode;  // xor value without this byte
 	uint16 uid; // unique class id
 	int32 size; // body size
-	int32 reserved; // 64x alignment 
+	uint32 reserved; // 64x alignment 
 
 	FSNetBufferHead() :
 		syncword(DEFAULT_SYNCWORD_INT32),
@@ -40,6 +40,7 @@ struct FSNetBufferHead
 	FSNetBufferHead& operator=(const FSNetBufferHead& Other);
 	FORCEINLINE bool MemRead(uint8 *Data, int32 BufferSize);
 	FORCEINLINE static int32 MemSize();
+	uint8 XOR();
 };
 #pragma pack(pop)
 
@@ -72,6 +73,7 @@ struct FSNetBufferBody
 	bool IsValid();
 	FORCEINLINE bool MemRead(uint8 *Data, int32 BufferSize, int32 InLength);
 	FORCEINLINE int32 MemSize();
+	uint8 XOR();
 };
 
 /***************************************************/
@@ -89,20 +91,21 @@ struct FSNetBufferFoot
 #ifdef SERVO_PROTOCOL_SIGNATURE
 	FSHA256Signature signature;
 #endif // SERVO_PROTOCOL_SIGNATURE
-	int64 timestamp; // unix timestamp
+	uint64 timestamp; // unix timestamp
 
 	FSNetBufferFoot()
 		: timestamp(0)
 	{
 	}
 
-	FSNetBufferFoot(int64 InTimestamp)
+	FSNetBufferFoot(uint64 InTimestamp)
 		: timestamp(InTimestamp)
 	{
 	}
 
 	FORCEINLINE bool MemRead(uint8 *Data, int32 BufferSize);
 	FORCEINLINE static int32 MemSize();
+	uint8 XOR();
 };
 #pragma pack(pop)
 
@@ -113,9 +116,12 @@ struct FSNetBufferFoot
 			uid == 0
 			reserved == heart beat ext data
 			size == 0
+			reserved = client input 32bit timestamp
+
+		recv buffer no body & foot
 		[foot]
 			(signature)
-			timestamp
+			timestamp = FPlatformTime::Cycles64(); // when create
 		[session]
 */
 /************************************************************/
@@ -140,6 +146,10 @@ struct FSNetPacket
 	{}
 
 	FSNetPacket(uint8* Data, int32 BufferSize, int32& BytesRead, int32 InSyncword = DEFAULT_SYNCWORD_INT32);
+
+	uint64 GetTimestamp();
+
+	FORCEINLINE static FSNetPacket* CreateHeartbeat(int32 InSyncword = DEFAULT_SYNCWORD_INT32);
 };
 
 /************************************************************/

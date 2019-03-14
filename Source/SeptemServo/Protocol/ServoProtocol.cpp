@@ -5,6 +5,13 @@
 #include "SeptemAlgorithm/SeptemAlgorithm.h"
 using namespace Septem;
 
+
+#if PLATFORM_WINDOWS
+#include "Windows/WindowsPlatformTime.h"
+#elif  PLATFORM_LINUX
+#include "Unix/UnixPlatformTime.h"
+#endif
+
 ServoProtocol::ServoProtocol()
 {
 }
@@ -36,6 +43,14 @@ int32 FSNetBufferBody::MemSize()
 	return length;
 }
 
+uint8 FSNetBufferBody::XOR()
+{
+	uint8 ret = 0;
+	for (int32 i = 0; i < length; ++i)
+		ret ^= bufferPtr[i];
+	return ret;
+}
+
 FSNetBufferHead & FSNetBufferHead::operator=(const FSNetBufferHead & Other)
 {
 	FMemory::Memcpy(this, &Other, sizeof(FSNetBufferHead));
@@ -58,6 +73,18 @@ int32 FSNetBufferHead::MemSize()
 	return sizeof(FSNetBufferHead);
 }
 
+uint8 FSNetBufferHead::XOR()
+{
+	uint8 ret = 0;
+	uint8 *ptr = (uint8*)this;
+	const int32 imax = sizeof(FSNetBufferHead);
+	for (int32 i = 0; i < imax; ++i)
+	{
+		ret ^= ptr[i];
+	}
+	return ret;
+}
+
 bool FSNetPacket::IsValid()
 {
 	return bFastIntegrity;
@@ -74,11 +101,12 @@ bool FSNetPacket::FastIntegrity(uint8 * DataPtr, int32 DataLength, uint8 fastcod
 }
 
 FSNetPacket::FSNetPacket(uint8 * Data, int32 BufferSize, int32 & BytesRead, int32 InSyncword)
+	:sid(0), bFastIntegrity(false)
 {
-	bFastIntegrity = false;
 	Head.syncword = InSyncword;
 	// 1. find syncword for head
 	int32 index = BufferBufferSyncword(Data, BufferSize, Head.syncword);
+	uint8 fastcode = 0;
 
 	if (-1 == index)
 	{
@@ -96,6 +124,16 @@ FSNetPacket::FSNetPacket(uint8 * Data, int32 BufferSize, int32 & BytesRead, int3
 	}
 
 	index += FSNetBufferHead::MemSize();
+	fastcode ^= Head.XOR();
+
+	if (0 == Head.uid)
+	{
+		Foot.timestamp = FPlatformTime::Cycles64();
+
+		bFastIntegrity = fastcode == 0;
+		BytesRead = index;
+		return;
+	}
 
 	// 3. check and read body
 
@@ -106,6 +144,7 @@ FSNetPacket::FSNetPacket(uint8 * Data, int32 BufferSize, int32 & BytesRead, int3
 		return;
 	}
 	index += Body.MemSize();
+	fastcode ^= Body.XOR();
 
 	// 4. read foot
 	if (!Foot.MemRead(Data + index, BufferSize - index))
@@ -116,8 +155,26 @@ FSNetPacket::FSNetPacket(uint8 * Data, int32 BufferSize, int32 & BytesRead, int3
 	}
 
 	index += FSNetBufferFoot::MemSize();
+	fastcode ^= Foot.XOR();
 
 	BytesRead = index;
+	bFastIntegrity = fastcode == 0;
+
+	return;
+}
+
+uint64 FSNetPacket::GetTimestamp()
+{
+	return Foot.timestamp;
+}
+
+FSNetPacket * FSNetPacket::CreateHeartbeat(int32 InSyncword)
+{
+	FSNetPacket* packet = new FSNetPacket();
+	packet->Head.syncword = InSyncword;
+	packet->Head.reserved = FPlatformTime::Cycles();
+	packet->Head.fastcode = packet->Head.XOR();
+	return nullptr;
 }
 
 bool FSNetBufferFoot::MemRead(uint8 * Data, int32 BufferSize)
@@ -134,4 +191,16 @@ bool FSNetBufferFoot::MemRead(uint8 * Data, int32 BufferSize)
 int32 FSNetBufferFoot::MemSize()
 {
 	return sizeof(FSNetBufferFoot);
+}
+
+uint8 FSNetBufferFoot::XOR()
+{
+	uint8 ret = 0;
+	uint8 *ptr = (uint8*)this;
+	const int32 imax = sizeof(FSNetBufferFoot);
+	for (int32 i = 0; i < imax; ++i)
+	{
+		ret ^= ptr[i];
+	}
+	return ret;
 }
