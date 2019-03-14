@@ -17,11 +17,13 @@ public:
 	FORCEINLINE TNetPacketPool() = default;
 	virtual ~TNetPacketPool()
 	{
-		packetPool.Empty();
 	}
 
+	// Thread-safe
 	virtual bool Push(const TSharedPtr<T>& InSharedPtr) = 0;
+	// Thread-safe
 	virtual bool Pop(TSharedPtr<T>& OutSharedPtr) = 0;
+	// may not Thread-safe
 	virtual bool IsEmpty() = 0;
 };
 
@@ -33,6 +35,7 @@ template<typename T>
 class SEPTEMSERVO_API TNetPacketQueue
 	: public TNetPacketPool<T>
 {
+public:
 	FORCEINLINE TNetPacketQueue()
 		: TNetPacketPool()
 	{
@@ -59,7 +62,7 @@ class SEPTEMSERVO_API TNetPacketQueue
 	}
 
 private:
-	TQueue< TSharedPtr<T>, EQueueMode::Mpsc > packetPool;
+	TQueue<TSharedPtr<T>, EQueueMode::Mpsc > packetPool;
 };
 
 
@@ -72,6 +75,7 @@ template<typename T>
 class SEPTEMSERVO_API TNetPacketHeap
 	: public TNetPacketPool<T>
 {
+public:
 	FORCEINLINE TNetPacketHeap()
 		: TNetPacketPool()
 	{

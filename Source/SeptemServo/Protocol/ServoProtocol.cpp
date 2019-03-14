@@ -5,20 +5,13 @@
 #include "SeptemAlgorithm/SeptemAlgorithm.h"
 using namespace Septem;
 
+#include "Misc/ScopeLock.h"
 
 #if PLATFORM_WINDOWS
 #include "Windows/WindowsPlatformTime.h"
 #elif  PLATFORM_LINUX
 #include "Unix/UnixPlatformTime.h"
 #endif
-
-ServoProtocol::ServoProtocol()
-{
-}
-
-ServoProtocol::~ServoProtocol()
-{
-}
 
 bool FSNetBufferBody::IsValid()
 {
@@ -204,3 +197,60 @@ uint8 FSNetBufferFoot::XOR()
 	}
 	return ret;
 }
+
+FServoProtocol::FServoProtocol()
+{
+	check(pSingleton == nullptr && "Protocol singleton can't create 2 object!");
+	pSingleton = this;
+	PacketPool = new TNetPacketQueue<FSNetPacket>();
+}
+
+FServoProtocol::~FServoProtocol()
+{
+	pSingleton = nullptr;
+}
+
+FServoProtocol * FServoProtocol::Get()
+{
+	if (nullptr == pSingleton) {
+		FScopeLock lockSingleton(&mCriticalSection);
+		pSingleton = new FServoProtocol();
+	}
+	
+	return pSingleton;
+}
+
+FServoProtocol & FServoProtocol::GetRef()
+{
+	if (nullptr == pSingleton) {
+		FScopeLock lockSingleton(&mCriticalSection);
+		pSingleton = new FServoProtocol();
+	}
+
+	return *pSingleton;
+}
+
+FServoProtocol * FServoProtocol::Singleton()
+{
+	check(pSingleton && "Protocol singleton doesn't exist!");
+	return pSingleton;
+}
+
+FServoProtocol & FServoProtocol::SingletonRef()
+{
+	check(pSingleton && "Protocol singleton doesn't exist!");
+	return *pSingleton;
+}
+
+bool FServoProtocol::Push(TSharedPtr<FSNetPacket> InNetPacket)
+{
+	return PacketPool->Push(InNetPacket);
+}
+
+bool FServoProtocol::Pop(TSharedPtr<FSNetPacket>& OutNetPacket)
+{
+	return PacketPool->Pop(OutNetPacket);
+}
+
+FServoProtocol* FServoProtocol::pSingleton = nullptr;
+FCriticalSection FServoProtocol::mCriticalSection;

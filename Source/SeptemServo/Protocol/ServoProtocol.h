@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 
+#include "NetPacketPool.hpp"
+
 //#define SERVO_PROTOCOL_SIGNATURE
 
 #ifndef DEFAULT_SYNCWORD_INT32
@@ -162,10 +164,33 @@ struct FSNetPacket
 
 /**
  * the protocol of SeptemServo
+ * singleton for handle pools
+ * FORWARD: typedef singleton WorkPool<Part>
  */
-class SEPTEMSERVO_API ServoProtocol
+class SEPTEMSERVO_API FServoProtocol
 {
+private:
+	FServoProtocol();
 public:
-	ServoProtocol();
-	~ServoProtocol();
+	virtual ~FServoProtocol();
+
+	// thread safe; singleton will init when first call get()
+	FORCEINLINE static FServoProtocol* Get();
+	// thread safe; singleton will init when first call getRef()
+	FORCEINLINE static FServoProtocol& GetRef();
+
+	// danger call, but fast
+	FORCEINLINE static FServoProtocol* Singleton();
+	// danger call, but fast
+	FORCEINLINE static FServoProtocol& SingletonRef();
+
+	bool Push(TSharedPtr<FSNetPacket> InNetPacket);
+	bool Pop(TSharedPtr<FSNetPacket>& OutNetPacket);
+
+protected:
+	static FServoProtocol* pSingleton;
+	static FCriticalSection mCriticalSection;
+
+	// force to push/pop TSharedPtr
+	TNetPacketPool<FSNetPacket>* PacketPool;
 };
