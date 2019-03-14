@@ -17,7 +17,7 @@
 // buffer body
 // (optional) buffer foot
 /***************************************/
-
+#pragma pack(push, 1)
 struct FSNetBufferHead
 {
 	int32 syncword; // combine with 4 char(uint8).  make them differents to get efficient  
@@ -39,7 +39,10 @@ struct FSNetBufferHead
 
 	FSNetBufferHead& operator=(const FSNetBufferHead& Other);
 	FORCEINLINE bool MemRead(uint8 *Data, int32 BufferSize);
+	FORCEINLINE static int32 MemSize();
 };
+#pragma pack(pop)
+
 
 union UnionBufferHead
 {
@@ -67,6 +70,8 @@ struct FSNetBufferBody
 	{}
 
 	bool IsValid();
+	FORCEINLINE bool MemRead(uint8 *Data, int32 BufferSize, int32 InLength);
+	FORCEINLINE int32 MemSize();
 };
 
 /***************************************************/
@@ -77,8 +82,10 @@ struct FSNetBufferBody
 		[ signature, timestamp]
 */
 /***************************************************/
+#pragma pack(push, 1)
 struct FSNetBufferFoot
 {
+// if use version, makesure #if SERVO_PROTOCOL_VERSION > 1 
 #ifdef SERVO_PROTOCOL_SIGNATURE
 	FSHA256Signature signature;
 #endif // SERVO_PROTOCOL_SIGNATURE
@@ -93,7 +100,11 @@ struct FSNetBufferFoot
 		: timestamp(InTimestamp)
 	{
 	}
+
+	FORCEINLINE bool MemRead(uint8 *Data, int32 BufferSize);
+	FORCEINLINE static int32 MemSize();
 };
+#pragma pack(pop)
 
 /************************************************************/
 /*
@@ -130,6 +141,14 @@ struct FSNetPacket
 
 	FSNetPacket(uint8* Data, int32 BufferSize, int32& BytesRead, int32 InSyncword = DEFAULT_SYNCWORD_INT32);
 };
+
+/************************************************************/
+/*
+		Help
+		TSharedPtr<FSNetPacket> packet = MakeShareable(FSNetPacket::Create(Data, BufferSize, BytesRead));
+		TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> packet = MakeShared<FSNetPacket, ESPMode::ThreadSafe>(?);
+*/
+/************************************************************/
 
 /**
  * the protocol of SeptemServo

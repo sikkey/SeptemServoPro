@@ -18,6 +18,24 @@ bool FSNetBufferBody::IsValid()
 	return bufferPtr != nullptr;
 }
 
+bool FSNetBufferBody::MemRead(uint8 * Data, int32 BufferSize, int32 InLength)
+{
+	if( BufferSize < InLength || InLength < 0)
+		return false;
+
+	length = InLength;
+	bufferPtr = new uint8[length];
+	
+	FMemory::Memcpy(bufferPtr, Data, length);
+
+	return true;
+}
+
+int32 FSNetBufferBody::MemSize()
+{
+	return length;
+}
+
 FSNetBufferHead & FSNetBufferHead::operator=(const FSNetBufferHead & Other)
 {
 	FMemory::Memcpy(this, &Other, sizeof(FSNetBufferHead));
@@ -33,6 +51,11 @@ bool FSNetBufferHead::MemRead(uint8 * Data, int32 BufferSize)
 	FMemory::Memcpy(this, Data, ReadSize);
 
 	return true;
+}
+
+int32 FSNetBufferHead::MemSize()
+{
+	return sizeof(FSNetBufferHead);
 }
 
 bool FSNetPacket::IsValid()
@@ -60,13 +83,55 @@ FSNetPacket::FSNetPacket(uint8 * Data, int32 BufferSize, int32 & BytesRead, int3
 	if (-1 == index)
 	{
 		// failed to find syncword in the whole buffer
+		BytesRead = BufferSize;
 		return;
 	}
 
 	// 2. read head
-	Head.MemRead(Data + index, BufferSize - index);
-	// TODO: 3. check and read body
-	// TODO: 4. read foot
+	if (!Head.MemRead(Data + index, BufferSize - index))
+	{
+		// failed to read from the rest buffer
+		BytesRead = BufferSize;
+		return;
+	}
+
+	index += FSNetBufferHead::MemSize();
+
+	// 3. check and read body
+
+	if (!Body.MemRead(Data + index, BufferSize - index, Head.size))
+	{
+		// failed to read from the rest buffer
+		BytesRead = BufferSize;
+		return;
+	}
+	index += Body.MemSize();
+
+	// 4. read foot
+	if (!Foot.MemRead(Data + index, BufferSize - index))
+	{
+		// failed to read from the rest buffer
+		BytesRead = BufferSize;
+		return;
+	}
+
+	index += FSNetBufferFoot::MemSize();
 
 	BytesRead = index;
+}
+
+bool FSNetBufferFoot::MemRead(uint8 * Data, int32 BufferSize)
+{
+	const int32 ReadSize = sizeof(FSNetBufferFoot);
+	if (BufferSize < ReadSize)
+		return false;
+
+	FMemory::Memcpy(this, Data, ReadSize);
+
+	return true;
+}
+
+int32 FSNetBufferFoot::MemSize()
+{
+	return sizeof(FSNetBufferFoot);
 }
