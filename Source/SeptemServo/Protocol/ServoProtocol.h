@@ -72,6 +72,15 @@ struct FSNetBufferBody
 		, length(0)
 	{}
 
+	~FSNetBufferBody()
+	{
+		if (bufferPtr)
+		{
+			delete bufferPtr;
+			length = 0;
+		}
+	}
+
 	bool IsValid();
 	FORCEINLINE bool MemRead(uint8 *Data, int32 BufferSize, int32 InLength);
 	FORCEINLINE int32 MemSize();
@@ -118,7 +127,7 @@ struct FSNetBufferFoot
 			uid == 0
 			reserved == heart beat ext data
 			size == 0
-			reserved = client input 32bit timestamp
+			reserved = client input 32bit session
 
 		recv buffer no body & foot
 		[foot]
