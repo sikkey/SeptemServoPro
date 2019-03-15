@@ -61,8 +61,14 @@ union UnionSyncword
 	int32 value;
 };
 
-//0xE6B7F1A2
-static UnionSyncword SyncwordDefault = { 230ui8, 183ui8, 241ui8, 162ui8 };
+//0xE6B7F1A2	little endian
+static UnionSyncword SyncwordDefault =
+#if PLATFORM_LITTLE_ENDIAN > 0
+	{ 162ui8, 241ui8, 183ui8, 230ui8 };
+#elif
+	{ 230ui8, 183ui8, 241ui8, 162ui8 };
+#endif
+
 
 struct FSNetBufferBody
 {
@@ -166,13 +172,14 @@ struct FSNetPacket
 	{}
 
 	FSNetPacket(uint8* Data, int32 BufferSize, int32& BytesRead, int32 InSyncword = DEFAULT_SYNCWORD_INT32);
-
 	uint64 GetTimestamp();
 
-	FORCEINLINE static FSNetPacket* CreateHeartbeat(int32 InSyncword = DEFAULT_SYNCWORD_INT32);
+	static FSNetPacket* CreateHeartbeat(int32 InSyncword = DEFAULT_SYNCWORD_INT32);
 	void ReUse(uint8* Data, int32 BufferSize, int32& BytesRead, int32 InSyncword = DEFAULT_SYNCWORD_INT32);
+	void WriteToArray(TArray<uint8>& InBufferArr);
 	void OnDealloc();
 	void OnAlloc();
+	void ReUseAsHeartbeat(int32 InSyncword = DEFAULT_SYNCWORD_INT32);
 };
 
 /************************************************************/
@@ -196,17 +203,19 @@ public:
 	virtual ~FServoProtocol();
 
 	// thread safe; singleton will init when first call get()
-	FORCEINLINE static FServoProtocol* Get();
+	static FServoProtocol* Get();
 	// thread safe; singleton will init when first call getRef()
-	FORCEINLINE static FServoProtocol& GetRef();
+	static FServoProtocol& GetRef();
 
 	// danger call, but fast
-	FORCEINLINE static FServoProtocol* Singleton();
+	static FServoProtocol* Singleton();
 	// danger call, but fast
-	FORCEINLINE static FServoProtocol& SingletonRef();
+	static FServoProtocol& SingletonRef();
 
-	bool Push(TSharedPtr<FSNetPacket> InNetPacket);
-	bool Pop(TSharedPtr<FSNetPacket>& OutNetPacket);
+	// push recv packet into packet pool
+	bool Push(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> InNetPacket);
+	// pop from packet pool
+	bool Pop(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& OutNetPacket);
 
 	//=========================================
 	//		Net Packet Pool Memory Management
@@ -223,6 +232,6 @@ protected:
 	static FCriticalSection mCriticalSection;
 
 	// force to push/pop TSharedPtr
-	TNetPacketPool<FSNetPacket>* PacketPool;
+	TNetPacketPool<FSNetPacket, ESPMode::ThreadSafe>* PacketPool;
 	Septem::TSharedRecyclePool<FSNetPacket, ESPMode::ThreadSafe> RecyclePool;
 };

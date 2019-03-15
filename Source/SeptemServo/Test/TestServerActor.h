@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "../Threads/ListenThread.h"
+#include "Protocol/ServoProtocol.h"
 #include "TestServerActor.generated.h"
 
 UCLASS()
@@ -72,4 +73,18 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Actor)
 		bool bCleanup;
+
+	TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> LastPacket;
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		int32 GetHeadSyncword();
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		uint8 GetVersion();
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		uint8 GetFastcode();
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		int32 GetUid();
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		int32 GetSize();
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		int32 GetReserved();
 };

@@ -1,6 +1,7 @@
 // Copyright (c) 2013-2019 7Mersenne All Rights Reserved.
 
 #include "ConnectThread.h"
+#include "Protocol/ServoProtocol.h"
 
 // default buffer max  = 1mb
 int32 FConnectThread::MaxReceivedCount = 1024 * 1024;
@@ -56,6 +57,7 @@ uint32 FConnectThread::Run()
 	uint32 pendingDataSize = 0;
 	int32 BytesRead = 0;
 	bool bRcev = false;
+	FServoProtocol* ServoProtocol = FServoProtocol::Get();
 
 	if (nullptr == ConnectSocket)
 	{
@@ -79,13 +81,23 @@ uint32 FConnectThread::Run()
 			{
 				if (BytesRead > ReceivedData.Num())
 				{
+					//stack overflow
 					UE_LOG(LogTemp, Display, TEXT("[Warnning]FConnectThread: receive stack overflow!\n"));
-					//TODO: stack overflow
 					continue;
 				}
 
-				// TODO: recv data
+				// TODO: recv data for while every syncword
 				UE_LOG(LogTemp, Display, TEXT("FConnectThread: receive byte = %d length = %d\n"), ReceivedData.GetData()[0], ReceivedData.Num());
+				
+				int32 BytesWrite = 0;
+				while (BytesWrite < BytesRead)
+				{
+					TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> pPacket(ServoProtocol->AllocNetPacket());
+					pPacket->ReUse(ReceivedData.GetData(), ReceivedData.Num(), BytesWrite);
+					UE_LOG(LogTemp, Display, TEXT("FConnectThread: write bytes %d \n"), BytesWrite);
+					FPlatformMisc::MemoryBarrier();
+					ServoProtocol->Push(pPacket);
+				}
 			}
 			else {
 				//Error: pendingDataSize>0 Rcev failed

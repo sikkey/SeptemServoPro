@@ -16,6 +16,8 @@ ATestServerActor::ATestServerActor()
 	PoolTimespan = 0.05f;
 
 	bCleanup = true;
+
+	LastPacket = FServoProtocol::Get()->AllocNetPacket();
 }
 
 // Called when the game starts or when spawned
@@ -40,6 +42,14 @@ void ATestServerActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> newPacket;
+	if (FServoProtocol::Get()->Pop(newPacket))
+	{
+		//TODO: deallcok net packet crack!  TSharedPtr IsValid() check false meas LastPacket = nullptr
+		FServoProtocol::Get()->DeallockNetPacket(LastPacket);
+		LastPacket = newPacket;
+		UE_LOG(LogTemp, Display, TEXT("ATestServerActor: DeallockNetPacket End \n"));
+	}
 }
 
 void ATestServerActor::RunServer(bool bRestart)
@@ -143,6 +153,60 @@ void ATestServerActor::SetNeedCleanup(bool InNeedCleanup)
 			bCleanup = poolThread->bCleanup;
 		}
 	}
+}
+
+int32 ATestServerActor::GetHeadSyncword()
+{
+	if (LastPacket.Get())
+	{
+		return LastPacket.Get()->Head.syncword;
+	}
+	return int32();
+}
+
+uint8 ATestServerActor::GetVersion()
+{
+	if (LastPacket.Get())
+	{
+		return LastPacket.Get()->Head.version;
+	}
+	return uint8();
+}
+
+uint8 ATestServerActor::GetFastcode()
+{
+	if (LastPacket.Get())
+	{
+		return LastPacket.Get()->Head.fastcode;
+	}
+	return uint8();
+}
+
+int32 ATestServerActor::GetUid()
+{
+	if (LastPacket.Get())
+	{
+		return LastPacket.Get()->Head.uid;
+	}
+	return int32();
+}
+
+int32 ATestServerActor::GetSize()
+{
+	if (LastPacket.Get())
+	{
+		return LastPacket.Get()->Head.size;
+	}
+	return int32();
+}
+
+int32 ATestServerActor::GetReserved()
+{
+	if (LastPacket.Get())
+	{
+		return LastPacket.Get()->Head.reserved;
+	}
+	return int32();
 }
 
 

@@ -2,6 +2,8 @@
 
 #include "TestClientNoThreadActor.h"
 
+#include "Protocol/ServoProtocol.h"
+
 // Sets default values
 ATestClientNoThreadActor::ATestClientNoThreadActor()
 {
@@ -131,6 +133,31 @@ void ATestClientNoThreadActor::SendByteUDP(uint8 InByte)
 		if (ClientSocket->SendTo(buffer.GetData(), buffer.Num(), bytesSend, *ServerAddr))
 		{
 			UE_LOG(LogTemp, Display, TEXT("ATestClientNoThreadActor: socket udp send done. \n"));
+		}
+		else {
+			ReleaseSocket();
+		}
+	}
+}
+
+void ATestClientNoThreadActor::SendHeartbeat()
+{
+	if (ClientSocket)
+	{
+		FSNetPacket* ptr = FSNetPacket::CreateHeartbeat();
+		TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> ptrPacket(ptr);
+
+		int32 bytesSend = 0;
+		TArray<uint8> buffer;
+
+		buffer.Reset(1024);
+
+		if(ptrPacket.Get())
+			ptrPacket.Get()->WriteToArray(buffer);
+
+		if (ClientSocket->Send(buffer.GetData(), buffer.Num(), bytesSend))
+		{
+			UE_LOG(LogTemp, Display, TEXT("ATestClientNoThreadActor: socket heartbeat send  %d bytes done. buffer num = %d \n"), bytesSend, buffer.Num());
 		}
 		else {
 			ReleaseSocket();

@@ -195,7 +195,7 @@ FSNetPacket * FSNetPacket::CreateHeartbeat(int32 InSyncword)
 	packet->Head.syncword = InSyncword;
 	packet->Head.reserved = FPlatformTime::Cycles();
 	packet->Head.fastcode = packet->Head.XOR();
-	return nullptr;
+	return packet;
 }
 
 void FSNetPacket::ReUse(uint8 * Data, int32 BufferSize, int32 & BytesRead, int32 InSyncword)
@@ -267,6 +267,34 @@ void FSNetPacket::ReUse(uint8 * Data, int32 BufferSize, int32 & BytesRead, int32
 	return;
 }
 
+void FSNetPacket::WriteToArray(TArray<uint8>& InBufferArr)
+{
+	int32 BytesWrite = 0;
+	int32 writeSize = sizeof(FSNetBufferHead);
+	if (Head.uid > 0ui16)
+	{
+		writeSize += Body.length + sizeof(FSNetBufferFoot);
+	}
+
+	InBufferArr.SetNumZeroed (writeSize);
+	uint8* DataPtr = InBufferArr.GetData();
+	
+	//1. write heads
+	FMemory::Memcpy(DataPtr, &Head, FSNetBufferHead::MemSize());
+	BytesWrite += sizeof(FSNetBufferHead);
+
+	if (Head.uid == 0)
+		return;
+	
+	//2. write Body
+	FMemory::Memcpy(DataPtr + BytesWrite, Body.bufferPtr, Body.length);
+	BytesWrite += Body.length;
+
+	//3. write Foot
+	FMemory::Memcpy(DataPtr + BytesWrite, &Foot, FSNetBufferFoot::MemSize());
+	BytesWrite += FSNetBufferFoot::MemSize();
+}
+
 void FSNetPacket::OnDealloc()
 {
 	sid = 0;
@@ -279,6 +307,16 @@ void FSNetPacket::OnAlloc()
 {
 	Head.Reset();
 	Foot.Reset();
+}
+
+void FSNetPacket::ReUseAsHeartbeat(int32 InSyncword)
+{
+	Head.syncword = InSyncword;
+	Head.reserved = FPlatformTime::Cycles();
+	Head.size = 0;
+	Head.version = 0;
+	Head.uid = 0;
+	Head.fastcode = Head.XOR();
 }
 
 bool FSNetBufferFoot::MemRead(uint8 * Data, int32 BufferSize)
@@ -314,7 +352,7 @@ FServoProtocol::FServoProtocol()
 {
 	check(pSingleton == nullptr && "Protocol singleton can't create 2 object!");
 	pSingleton = this;
-	PacketPool = new TNetPacketQueue<FSNetPacket>();
+	PacketPool = new TNetPacketQueue<FSNetPacket, ESPMode::ThreadSafe>();
 }
 
 FServoProtocol::~FServoProtocol()
@@ -354,12 +392,12 @@ FServoProtocol & FServoProtocol::SingletonRef()
 	return *pSingleton;
 }
 
-bool FServoProtocol::Push(TSharedPtr<FSNetPacket> InNetPacket)
+bool FServoProtocol::Push(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> InNetPacket)
 {
 	return PacketPool->Push(InNetPacket);
 }
 
-bool FServoProtocol::Pop(TSharedPtr<FSNetPacket>& OutNetPacket)
+bool FServoProtocol::Pop(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& OutNetPacket)
 {
 	return PacketPool->Pop(OutNetPacket);
 }
@@ -371,15 +409,21 @@ TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> FServoProtocol::AllocNetPacket()
 
 void FServoProtocol::DeallockNetPacket(const TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& InSharedPtr, bool bForceRecycle)
 {
-	InSharedPtr->OnDealloc();
+	if (!InSharedPtr.IsValid())
+		return;
 
+	UE_LOG(LogTemp, Display, TEXT("OnDeallocBegin"));
+	InSharedPtr->OnDealloc();
+	UE_LOG(LogTemp, Display, TEXT("OnDeallocEnd"));
 	if (bForceRecycle)
 	{
 		RecyclePool.DeallocForceRecycle(InSharedPtr);
 	}
 	else 
 	{
+		UE_LOG(LogTemp, Display, TEXT("recycle begin"));
 		RecyclePool.Dealloc(InSharedPtr);
+		UE_LOG(LogTemp, Display, TEXT("recycle end"));
 	}
 }
 

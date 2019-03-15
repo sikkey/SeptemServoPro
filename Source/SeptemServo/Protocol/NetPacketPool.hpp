@@ -10,7 +10,7 @@
  * net packet pool base class
  * for set any pool algorithm 
  */
-template<typename T>
+template<typename T, ESPMode InMode = ESPMode::Fast>
 class SEPTEMSERVO_API TNetPacketPool
 {
 public:
@@ -20,9 +20,9 @@ public:
 	}
 
 	// Thread-safe
-	virtual bool Push(const TSharedPtr<T>& InSharedPtr) = 0;
+	virtual bool Push(const TSharedPtr<T, InMode>& InSharedPtr) = 0;
 	// Thread-safe
-	virtual bool Pop(TSharedPtr<T>& OutSharedPtr) = 0;
+	virtual bool Pop(TSharedPtr<T, InMode>& OutSharedPtr) = 0;
 	// may not Thread-safe
 	virtual bool IsEmpty() = 0;
 };
@@ -31,9 +31,9 @@ public:
  * net packet pool with Queue strategy
  * Multiple-producers single-consumer (MPSC)  for multi-thread
  */
-template<typename T>
+template<typename T, ESPMode InMode = ESPMode::Fast>
 class SEPTEMSERVO_API TNetPacketQueue
-	: public TNetPacketPool<T>
+	: public TNetPacketPool<T, InMode>
 {
 public:
 	FORCEINLINE TNetPacketQueue()
@@ -46,12 +46,12 @@ public:
 		packetPool.Empty();
 	}
 
-	bool Push(const TSharedPtr<T>& InSharedPtr) override
+	bool Push(const TSharedPtr<T, InMode>& InSharedPtr) override
 	{
 		return packetPool.Enqueue(InSharedPtr);
 	}
 
-	bool Pop(TSharedPtr<T>& OutSharedPtr) override
+	bool Pop(TSharedPtr<T, InMode>& OutSharedPtr) override
 	{
 		return packetPool.Dequeue(OutSharedPtr);
 	}
@@ -62,7 +62,7 @@ public:
 	}
 
 private:
-	TQueue<TSharedPtr<T>, EQueueMode::Mpsc > packetPool;
+	TQueue<TSharedPtr<T, InMode>, EQueueMode::Mpsc > packetPool;
 };
 
 
@@ -71,9 +71,9 @@ private:
  * Attention about maxnum > heap.num
  * add a private lock for Multiple-producers 
  */
-template<typename T>
+template<typename T, ESPMode InMode = ESPMode::Fast>
 class SEPTEMSERVO_API TNetPacketHeap
-	: public TNetPacketPool<T>
+	: public TNetPacketPool<T, InMode>
 {
 public:
 	FORCEINLINE TNetPacketHeap()
@@ -89,13 +89,13 @@ public:
 		heapPool.Empty();
 	}
 
-	bool Push(const TSharedPtr<T>& InSharedPtr) override
+	bool Push(const TSharedPtr<T, InMode>& InSharedPtr) override
 	{
 		FScopeLock lockPool(&HeapLock);
 		return heapPool.HeapPush(InSharedPtr) >=0;
 	}
 
-	bool Pop(TSharedPtr<T>& OutSharedPtr) override
+	bool Pop(TSharedPtr<T, InMode>& OutSharedPtr) override
 	{
 		FScopeLock lockPool(&HeapLock);
 		if (IsEmpty())
@@ -111,6 +111,6 @@ public:
 
 	
 private:
-	TArray<TSharedPtr<T> > heapPool;
+	TArray<TSharedPtr<T, InMode> > heapPool;
 	FCriticalSection HeapLock;
 };
