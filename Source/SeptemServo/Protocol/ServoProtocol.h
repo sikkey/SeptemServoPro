@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 
 #include "NetPacketPool.hpp"
+#include "SeptemAlgorithm/SeptemAlgorithm.h"
 
 //#define SERVO_PROTOCOL_SIGNATURE
 
@@ -43,6 +44,7 @@ struct FSNetBufferHead
 	FORCEINLINE bool MemRead(uint8 *Data, int32 BufferSize);
 	FORCEINLINE static int32 MemSize();
 	uint8 XOR();
+	void Reset();
 };
 #pragma pack(pop)
 
@@ -74,17 +76,15 @@ struct FSNetBufferBody
 
 	~FSNetBufferBody()
 	{
-		if (bufferPtr)
-		{
-			delete bufferPtr;
-			length = 0;
-		}
+		Reset();
 	}
 
 	bool IsValid();
 	FORCEINLINE bool MemRead(uint8 *Data, int32 BufferSize, int32 InLength);
 	FORCEINLINE int32 MemSize();
 	uint8 XOR();
+
+	void Reset();
 };
 
 /***************************************************/
@@ -117,6 +117,15 @@ struct FSNetBufferFoot
 	FORCEINLINE bool MemRead(uint8 *Data, int32 BufferSize);
 	FORCEINLINE static int32 MemSize();
 	uint8 XOR();
+
+	void Reset()
+	{
+#ifdef SERVO_PROTOCOL_SIGNATURE
+		memset(signature, 0, sizeof(signature));
+#endif // SERVO_PROTOCOL_SIGNATURE
+
+		timestamp = 0ui64;
+	}
 };
 #pragma pack(pop)
 
@@ -161,6 +170,9 @@ struct FSNetPacket
 	uint64 GetTimestamp();
 
 	FORCEINLINE static FSNetPacket* CreateHeartbeat(int32 InSyncword = DEFAULT_SYNCWORD_INT32);
+	void ReUse(uint8* Data, int32 BufferSize, int32& BytesRead, int32 InSyncword = DEFAULT_SYNCWORD_INT32);
+	void OnDealloc();
+	void OnAlloc();
 };
 
 /************************************************************/
@@ -196,10 +208,21 @@ public:
 	bool Push(TSharedPtr<FSNetPacket> InNetPacket);
 	bool Pop(TSharedPtr<FSNetPacket>& OutNetPacket);
 
+	//=========================================
+	//		Net Packet Pool Memory Management
+	//=========================================
+	static int32 RecyclePoolMaxnum;
+
+	// please call ReUse or set value manulity after recycle alloc
+	TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> AllocNetPacket();
+	// recycle dealloc
+	void DeallockNetPacket(const TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& InSharedPtr, bool bForceRecycle = false);
+
 protected:
 	static FServoProtocol* pSingleton;
 	static FCriticalSection mCriticalSection;
 
 	// force to push/pop TSharedPtr
 	TNetPacketPool<FSNetPacket>* PacketPool;
+	Septem::TSharedRecyclePool<FSNetPacket, ESPMode::ThreadSafe> RecyclePool;
 };

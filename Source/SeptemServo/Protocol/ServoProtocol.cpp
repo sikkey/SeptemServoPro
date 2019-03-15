@@ -23,6 +23,11 @@ bool FSNetBufferBody::MemRead(uint8 * Data, int32 BufferSize, int32 InLength)
 	if( BufferSize < InLength || InLength < 0)
 		return false;
 
+	if (length > 0)
+	{
+		Reset();
+	}
+
 	length = InLength;
 	bufferPtr = new uint8[length];
 	
@@ -42,6 +47,16 @@ uint8 FSNetBufferBody::XOR()
 	for (int32 i = 0; i < length; ++i)
 		ret ^= bufferPtr[i];
 	return ret;
+}
+
+void FSNetBufferBody::Reset()
+{
+	if (bufferPtr)
+	{
+		delete bufferPtr;
+		bufferPtr = nullptr;
+		length = 0;
+	}
 }
 
 FSNetBufferHead & FSNetBufferHead::operator=(const FSNetBufferHead & Other)
@@ -76,6 +91,15 @@ uint8 FSNetBufferHead::XOR()
 		ret ^= ptr[i];
 	}
 	return ret;
+}
+
+void FSNetBufferHead::Reset()
+{
+	version = 0;
+	fastcode = 0;
+	uid = 0;
+	size = 0;
+	reserved = 0;
 }
 
 bool FSNetPacket::IsValid()
@@ -121,9 +145,11 @@ FSNetPacket::FSNetPacket(uint8 * Data, int32 BufferSize, int32 & BytesRead, int3
 
 	if (0 == Head.uid)
 	{
+		// it is a heart beat packet
 		Foot.timestamp = FPlatformTime::Cycles64();
 
 		bFastIntegrity = fastcode == 0;
+		sid = Head.reserved;
 		BytesRead = index;
 		return;
 	}
@@ -153,6 +179,8 @@ FSNetPacket::FSNetPacket(uint8 * Data, int32 BufferSize, int32 & BytesRead, int3
 	BytesRead = index;
 	bFastIntegrity = fastcode == 0;
 
+	sid = Head.reserved & ((1 << 30) - 1);
+
 	return;
 }
 
@@ -168,6 +196,89 @@ FSNetPacket * FSNetPacket::CreateHeartbeat(int32 InSyncword)
 	packet->Head.reserved = FPlatformTime::Cycles();
 	packet->Head.fastcode = packet->Head.XOR();
 	return nullptr;
+}
+
+void FSNetPacket::ReUse(uint8 * Data, int32 BufferSize, int32 & BytesRead, int32 InSyncword)
+{
+	sid = 0;
+	bFastIntegrity = false;
+
+	Head.syncword = InSyncword;
+	// 1. find syncword for head
+	int32 index = BufferBufferSyncword(Data, BufferSize, Head.syncword);
+	uint8 fastcode = 0;
+
+	if (-1 == index)
+	{
+		// failed to find syncword in the whole buffer
+		BytesRead = BufferSize;
+		return;
+	}
+
+	// 2. read head
+	if (!Head.MemRead(Data + index, BufferSize - index))
+	{
+		// failed to read from the rest buffer
+		BytesRead = BufferSize;
+		return;
+	}
+
+	index += FSNetBufferHead::MemSize();
+	fastcode ^= Head.XOR();
+
+	if (0 == Head.uid)
+	{
+		// it is a heart beat packet
+		Foot.timestamp = FPlatformTime::Cycles64();
+
+		bFastIntegrity = fastcode == 0;
+		sid = Head.reserved;
+		BytesRead = index;
+		return;
+	}
+
+	// 3. check and read body
+
+	if (!Body.MemRead(Data + index, BufferSize - index, Head.size))
+	{
+		// failed to read from the rest buffer
+		BytesRead = BufferSize;
+		return;
+	}
+	index += Body.MemSize();
+	fastcode ^= Body.XOR();
+
+	// 4. read foot
+	if (!Foot.MemRead(Data + index, BufferSize - index))
+	{
+		// failed to read from the rest buffer
+		BytesRead = BufferSize;
+		return;
+	}
+
+	index += FSNetBufferFoot::MemSize();
+	fastcode ^= Foot.XOR();
+
+	BytesRead = index;
+	bFastIntegrity = fastcode == 0;
+
+	sid = Head.reserved & ((1 << 30) - 1);
+
+	return;
+}
+
+void FSNetPacket::OnDealloc()
+{
+	sid = 0;
+	bFastIntegrity = false;
+	Body.Reset();
+	Head.size = 0;
+}
+
+void FSNetPacket::OnAlloc()
+{
+	Head.Reset();
+	Foot.Reset();
 }
 
 bool FSNetBufferFoot::MemRead(uint8 * Data, int32 BufferSize)
@@ -199,6 +310,7 @@ uint8 FSNetBufferFoot::XOR()
 }
 
 FServoProtocol::FServoProtocol()
+	:RecyclePool(RecyclePoolMaxnum)
 {
 	check(pSingleton == nullptr && "Protocol singleton can't create 2 object!");
 	pSingleton = this;
@@ -252,5 +364,25 @@ bool FServoProtocol::Pop(TSharedPtr<FSNetPacket>& OutNetPacket)
 	return PacketPool->Pop(OutNetPacket);
 }
 
+TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> FServoProtocol::AllocNetPacket()
+{
+	return RecyclePool.Alloc();
+}
+
+void FServoProtocol::DeallockNetPacket(const TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& InSharedPtr, bool bForceRecycle)
+{
+	InSharedPtr->OnDealloc();
+
+	if (bForceRecycle)
+	{
+		RecyclePool.DeallocForceRecycle(InSharedPtr);
+	}
+	else 
+	{
+		RecyclePool.Dealloc(InSharedPtr);
+	}
+}
+
 FServoProtocol* FServoProtocol::pSingleton = nullptr;
 FCriticalSection FServoProtocol::mCriticalSection;
+int32 FServoProtocol::RecyclePoolMaxnum = 1024;
