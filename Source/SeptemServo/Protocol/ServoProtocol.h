@@ -169,7 +169,8 @@ struct FSNetPacket
 	FSNetPacket()
 		: sid (0)
 		, bFastIntegrity(false)
-	{}
+	{
+	}
 
 	FSNetPacket(uint8* Data, int32 BufferSize, int32& BytesRead, int32 InSyncword = DEFAULT_SYNCWORD_INT32);
 	uint64 GetTimestamp();
@@ -213,7 +214,7 @@ public:
 	static FServoProtocol& SingletonRef();
 
 	// push recv packet into packet pool
-	bool Push(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> InNetPacket);
+	bool Push(const TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& InNetPacket);
 	// pop from packet pool
 	bool Pop(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& OutNetPacket);
 	int32 PacketPoolNum();

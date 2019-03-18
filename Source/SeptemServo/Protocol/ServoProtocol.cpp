@@ -393,7 +393,7 @@ FServoProtocol & FServoProtocol::SingletonRef()
 	return *pSingleton;
 }
 
-bool FServoProtocol::Push(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> InNetPacket)
+bool FServoProtocol::Push(const TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& InNetPacket)
 {
 	if (PacketPool->Push(InNetPacket))
 	{
