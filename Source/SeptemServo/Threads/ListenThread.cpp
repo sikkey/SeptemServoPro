@@ -12,8 +12,9 @@ FListenThread::FListenThread()
 	, Thread(nullptr)
 	, RankId(0)
 	, ListenerSocket(nullptr)
+	, ConnectionPoolThread(nullptr)
+	, PoolTimespan(0)
 {
-	ConnectThreadList.Reset(MaxBacklog);
 }
 
 FListenThread::~FListenThread()
@@ -28,18 +29,14 @@ FListenThread::~FListenThread()
 	// null events here
 
 	// cleanup init ptr
-	if (ListenerSocket)
-	{
-		ListenerSocket->Close();
-		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ListenerSocket);
-		ListenerSocket = nullptr;
-	}
+	SafeDestorySocket();
 }
 
 bool FListenThread::Init()
 {
+	LifecycleStep.Set(1);
 	// do network 
-
+	
 	// 1. create socket
 	ListenerSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("listen socket"), false);
 	//check(ListenerSocket);
@@ -70,6 +67,9 @@ bool FListenThread::Init()
 
 	UE_LOG(LogTemp, Display, TEXT("ListenerSocket: server listening\n"));
 
+	// <----- insert:  create connection pool
+	SafeConstructConnectionPool();
+
 	// 4. accept client
 	// 5. recv data
 	// accept&recv task in Run()
@@ -78,6 +78,7 @@ bool FListenThread::Init()
 
 uint32 FListenThread::Run()
 {
+	LifecycleStep.Set(2);
 	bool bHasPendingConnection = false;
 	if (nullptr == ListenerSocket) return 1ui32;  //exit code == 1 : thread run failed
 	while (!TimeToDie)
@@ -94,9 +95,8 @@ uint32 FListenThread::Run()
 			//FPlatformMisc::MemoryBarrier();
 
 			TSharedRef<FInternetAddr> clientAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
-			FIPv4Endpoint endPoint(clientAddr);
 			// accept with description = client {Rank Id}
-			FSocket* ConnectSocket = ListenerSocket->Accept(*clientAddr, FString::Printf(TEXT("ConnectSocket%d"), RankId));
+			FSocket* ConnectSocket = ListenerSocket->Accept(*clientAddr, FString::Printf(TEXT("ListenServer%d"), RankId));
 
 			if(nullptr == ConnectSocket)
 			{
@@ -105,42 +105,26 @@ uint32 FListenThread::Run()
 				return 1ui32;
 			}
 
+			UE_LOG(LogTemp, Display, TEXT("ListenerSocket: connect socket ptr = %d  ip =  %s\n"), ConnectSocket, *FIPv4Endpoint(clientAddr).ToString());
+
 			//check(ConnectSocket && "ConnectSocket == nullptr");
 			// connectThread will hold the ConnectSocket ptr, Don't care about it in this thread
 			ConnectSocket->SetNonBlocking(true);
 
 			FPlatformMisc::MemoryBarrier();
+			FIPv4Endpoint endPoint(clientAddr);
+
+			UE_LOG(LogTemp, Display, TEXT("ListenerSocket: accept client ip = %s \n"), *endPoint.ToString());
+
 			FConnectThread* connectThread = FConnectThread::Create(ConnectSocket, endPoint.Address, endPoint.Port, RankId);
-			ConnectThreadList.Add(connectThread);
-			++RankId;
+			if (connectThread != nullptr)
+			{
+				ConnectionPoolThread->SafeHoldThread(connectThread);
+				++RankId;
+			}
 		}
 		else {
 			UE_LOG(LogTemp, Display, TEXT("ListenerSocket: throw error when pending connection\n"));
-		}
-
-		// remove disconnected client
-		for (int32 i = ConnectThreadList.Num() - 1; i >= 0; --i)
-		{
-			// TODO: FPlatformMisc::MemoryBarrier(); to makesure i
-			if (ConnectThreadList[i] != nullptr)
-			{
-				if (!ConnectThreadList[i]->IsSocketConnection())
-				{
-					// TODO: block listen
-					if (ConnectThreadList[i]->KillThread())	// kill thread
-					{
-						delete ConnectThreadList[i];
-						ConnectThreadList[i] = nullptr;
-
-						// O(1): remove the last hole element and swap with the last element. Don't shrink array!
-						// the rank will not be out of order
-						ConnectThreadList.RemoveAtSwap(i, 1, false);
-					}
-				}
-			}
-			else {
-				ConnectThreadList.RemoveAtSwap(i);
-			}
 		}
 	}
 	//FPlatformMisc::MemoryBarrier();
@@ -157,36 +141,23 @@ void FListenThread::Stop()
 		// because pthread->kill will call stop
 		// IMPORTANT!!!you cannot call pthread->kill here!!!
 
+		if (nullptr != ListenerSocket)
+		{
+			ListenerSocket->Shutdown(ESocketShutdownMode::ReadWrite);
+		}
+
 		bStopped = true;
 	}
 }
 
 void FListenThread::Exit()
 {
+	LifecycleStep.Set(3);
+	SafeDestructConnectionPool();
 	// cleanup socket
-	if (nullptr != ListenerSocket)
-	{
-		delete ListenerSocket;
-		ListenerSocket = nullptr;
-	}
-
-	// cleanup threads
-	for (int32 i = 0; i < ConnectThreadList.Num(); ++i)
-	{
-		if (nullptr != ConnectThreadList[i])
-		{
-			if (ConnectThreadList[i]->KillThread())
-			{
-				delete ConnectThreadList[i];
-				ConnectThreadList[i] = nullptr;
-			}
-			else {
-				// TODO: kill failed
-				UE_LOG(LogTemp, Display, TEXT("FListenThread: kill thread failed with memory leak in exit()\n"));
-			}
-		}
-	}
+	SafeDestorySocket();
 	UE_LOG(LogTemp, Display, TEXT("FListenThread: exit()\n"));
+	LifecycleStep.Set(4);
 }
 
 /**
@@ -209,16 +180,12 @@ bool FListenThread::KillThread()
 		// it isn't actively doing work
 		//if(event) event->Trigger();
 
+		Stop();
+
 		// If waiting was specified, wait the amount of time. If that fails,
 		// brute force kill that thread. Very bad as that might leak.
 		Thread->WaitForCompletion();	//block call
 
-		for (int32 i = 0; i < ConnectThreadList.Num(); ++i)
-		{
-			check(ConnectThreadList[i]);
-			ConnectThreadList[i]->KillThread();	//block call
-		}
-		
 		// Clean up the event
 		// if(event) FPlatformProcess::ReturnSynchEventToPool(event);
 		// event = nullptr;
@@ -227,16 +194,13 @@ bool FListenThread::KillThread()
 		delete Thread;
 		Thread = nullptr;
 
-		// close socket
-		//TODO: check socket close
-		ListenerSocket->Shutdown(ESocketShutdownMode::ReadWrite);
-		ListenerSocket->Close();
+		// socket had been safe release in exit();
 	}
 
 	return bDidExit;
 }
 
-FListenThread * FListenThread::Create(int32 InPort)
+FListenThread * FListenThread::Create(int32 InPort, float InPoolTimespan)
 {
 	// if you need create event
 	//Event = FPlatformProcess::GetSynchEventFromPool();
@@ -244,6 +208,7 @@ FListenThread * FListenThread::Create(int32 InPort)
 	// create runnable
 	FListenThread* runnable = new FListenThread();
 	runnable->Port = InPort;
+	runnable->PoolTimespan = InPoolTimespan;
 
 	// create thread with runnable
 	FRunnableThread* thread = FRunnableThread::Create(runnable, TEXT("FListenThread"), 0, TPri_BelowNormal); //windows default = 8mb for thread, could specify 
@@ -260,32 +225,55 @@ FListenThread * FListenThread::Create(int32 InPort)
 	return runnable;
 }
 
-void FListenThread::CleanupDisconnection()
+int32 FListenThread::GetLifecycleStep()
 {
-	// remove disconnected client
-	for (int32 i = ConnectThreadList.Num() - 1; i >= 0; --i)
-	{
-		if (ConnectThreadList[i] != nullptr)
-		{
-			if (!ConnectThreadList[i]->IsSocketConnection())
-			{
-				// this fork is disconnected
-				// TODO: block listen
-				if (ConnectThreadList[i]->KillThread())	// kill thread
-				{
-					delete ConnectThreadList[i];
-					ConnectThreadList[i] = nullptr;
+	return LifecycleStep.GetValue();
+}
 
-					// O(1): remove the last hole element and swap with the last element. Don't shrink array!
-					// the rank will not be out of order
-					ConnectThreadList.RemoveAtSwap(i, 1, false);
-				}
-			}
-		}
-		else {
-			// O(1): remove the last hole element and swap with the last element. Don't shrink array!
-					// the rank will not be out of order
-			ConnectThreadList.RemoveAtSwap(i, 1, false);
-		}
+int32 FListenThread::GetPoolLifecycleStep()
+{
+	if (ConnectionPoolThread)
+	{
+		return ConnectionPoolThread->GetLifecycleStep();
+	}
+	return 0;
+}
+
+FConnectThreadPoolThread * FListenThread::GetPoolThread()
+{
+	return ConnectionPoolThread;
+}
+
+int32 FListenThread::GetRankID()
+{
+	return RankId;
+}
+
+void FListenThread::SafeDestorySocket()
+{
+	if (nullptr != ListenerSocket)
+	{
+		ListenerSocket->Close();
+		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ListenerSocket);
+		ListenerSocket = nullptr;
 	}
 }
+
+void FListenThread::SafeConstructConnectionPool()
+{
+	if (nullptr == ConnectionPoolThread)
+	{ 
+		ConnectionPoolThread = FConnectThreadPoolThread::Create(MaxBacklog, PoolTimespan);
+		UE_LOG(LogTemp, Display, TEXT("ListenerSocket: init connection pool \n"));
+	}
+}
+
+void FListenThread::SafeDestructConnectionPool()
+{
+	if (nullptr != ConnectionPoolThread)
+	{
+		ConnectionPoolThread->KillThread();
+		UE_LOG(LogTemp, Display, TEXT("ListenerSocket: Destruct connection pool \n"));
+	}
+}
+

@@ -51,9 +51,12 @@ private:
 	int32 RankId;	// consider volatile 
 	FCriticalSection ThreadPoolLock;
 	TArray<FConnectThread*> ConnectThreadPool;
+	TQueue< FConnectThread*, EQueueMode::Spsc> DestructQueue;
 
 	void SafeCleanupPool();
+	void SafeCleanupQueue();
 
+	float SleepTimeSpan;
 public:
 	//-------------------------------------------------------------------
 	// Critical Lock Call By Another Thread
@@ -64,10 +67,22 @@ public:
 	// must use KillThread to void deadlock
 	// if you use thread->kill() directly , easy to get deadlock or crash
 	bool KillThread();// use KillThread instead of thread->kill
-	static FConnectThreadPoolThread* Create(int32 InMaxBacklog = 100);
+	static FConnectThreadPoolThread* Create(int32 InMaxBacklog = 100, float InPoolTimespan = 0.05f);
 	void SafeHoldThread(FConnectThread* InThread);
 
 	// state
 	bool IsKillDone();
+	int32 GetLifecycleStep();
 
+	// debug info
+	int32 GetPoolLength();
+
+public:
+	//-------------------------------------------------------------------
+	//		no need thread safe
+	//-------------------------------------------------------------------
+	void SetCleanupTimespan(float InTimespan);
+	float GetCleanupTimespan();
+
+	bool bCleanup;
 };

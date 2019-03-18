@@ -5,9 +5,9 @@
 #include "CoreMinimal.h"
 #include "Core/Private/HAL/PThreadRunnableThread.h"
 #include "Networking.h"
-#include "ConnectThread.h"
+#include "ConnectThreadPoolThread.h"
 
-/**
+ /**
  * litsen runnable for server thread
  */
 class SEPTEMSERVO_API FListenThread : public FRunnable
@@ -29,8 +29,14 @@ public:
 	// must use KillThread to void deadlock
 	// if you use thread->kill() directly , easy to get deadlock or crash
 	bool KillThread();// use KillThread instead of thread->kill
-	static FListenThread* Create(int32 InPort = 3717);
+	static FListenThread* Create(int32 InPort = 3717, float InPoolTimespan = 0.05f);
 
+	int32 GetLifecycleStep();
+	int32 GetPoolLifecycleStep();
+
+	// [Dangerous call] only for debug info
+	FConnectThreadPoolThread* GetPoolThread();
+	int32 GetRankID();
 private:
 	//---------------------------------------------
 	// thread control
@@ -41,6 +47,8 @@ private:
 
 	// if ture means we had called stop();
 	FThreadSafeBool bStopped; // check stop()
+
+	FThreadSafeCounter LifecycleStep;
 	//TAtomic<bool> bPause;  //or FThreadSafeBool bPause;
 	//FEvent * Semaphore;
 
@@ -51,9 +59,11 @@ private:
 	FIPv4Address IPAdress;
 	int32 Port;
 	int32 MaxBacklog;				// max count of client
+	float PoolTimespan;
 
 	// socket
 	FSocket* ListenerSocket;
+	void SafeDestorySocket();
 
 	// server listen thread
 	FRunnableThread* Thread;
@@ -62,7 +72,8 @@ private:
 	// client connections
 	//---------------------------------------------
 	int32 RankId;	// consider volatile 
-	TArray<FConnectThread*> ConnectThreadList;
 
-	void CleanupDisconnection();
+	FConnectThreadPoolThread* ConnectionPoolThread;
+	void SafeConstructConnectionPool();
+	void SafeDestructConnectionPool();
 };

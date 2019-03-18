@@ -1,6 +1,7 @@
 // Copyright (c) 2013-2019 7Mersenne All Rights Reserved.
 
 #include "ConnectThread.h"
+#include "Protocol/ServoProtocol.h"
 
 // default buffer max  = 1mb
 int32 FConnectThread::MaxReceivedCount = 1024 * 1024;
@@ -11,6 +12,7 @@ FConnectThread::FConnectThread()
 	, ClientIPAdress(0ui32)
 	, Port(3717)
 	, RankId(0)
+	, TimeToDie(false)
 {
 	ReceivedData.Reset(MaxReceivedCount);
 }
@@ -21,6 +23,7 @@ FConnectThread::FConnectThread(FSocket * InSocket, FIPv4Address & InIP, int32 In
 	, ClientIPAdress(InIP)
 	, Port(InPort)
 	, RankId(InRank)
+	, TimeToDie(false)
 {
 	ReceivedData.Reset(MaxReceivedCount);
 }
@@ -35,13 +38,16 @@ FConnectThread::~FConnectThread()
 	}
 	// cleanup events
 	// null events here
+
+	// cleanup socket
+	SafeDestorySocket();
 }
 
 bool FConnectThread::Init()
 {
 	LifecycleStep.Set(1);
 	// if init success, return true here
-	return false;
+	return true;
 }
 
 uint32 FConnectThread::Run()
@@ -51,30 +57,60 @@ uint32 FConnectThread::Run()
 	uint32 pendingDataSize = 0;
 	int32 BytesRead = 0;
 	bool bRcev = false;
+	FServoProtocol* ServoProtocol = FServoProtocol::Get();
 
-	if (nullptr == ConnectSocket) return 1ui32;  //exit code == 1 : thread run failed
+	if (nullptr == ConnectSocket)
+	{
+		return 1ui32;  //exit code == 1 : thread run failed
+	}
+
 	while (!TimeToDie)
 	{
+		FPlatformProcess::Sleep(0.01f);
 		if (ConnectSocket->HasPendingData(pendingDataSize) && pendingDataSize > 0)
 		{
 			BytesRead = 0;
 			bRcev = false;
 
-			bRcev = ConnectSocket->Recv(ReceivedData.GetData(), ReceivedData.Num(), BytesRead, ESocketReceiveFlags::None);
+			// read all buffer
+			ReceivedData.SetNumUninitialized(pendingDataSize);
+			// Attention: ReceivedData.Num must >= pendingDataSize
+			bRcev = ConnectSocket->Recv(ReceivedData.GetData(), ReceivedData.Num(), BytesRead);
 
 			if (bRcev && BytesRead > 0)
 			{
-				if (BytesRead == ReceivedData.Num())
+				if (BytesRead > ReceivedData.Num())
 				{
+					//stack overflow
 					UE_LOG(LogTemp, Display, TEXT("[Warnning]FConnectThread: receive stack overflow!\n"));
-					//TODO: stack overflow
 					continue;
 				}
 
-				// TODO: recv data
-			}
+				// TODO: recv data for while every syncword
+				UE_LOG(LogTemp, Display, TEXT("FConnectThread: receive byte = %d length = %d\n"), ReceivedData.GetData()[0], ReceivedData.Num());
+				
+				int32 BytesWrite = 0;
+				while (BytesWrite < BytesRead)
+				{
+					TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> pPacket(ServoProtocol->AllocNetPacket());
+					pPacket->ReUse(ReceivedData.GetData(), ReceivedData.Num(), BytesWrite);
+					UE_LOG(LogTemp, Display, TEXT("FConnectThread: write bytes %d \n"), BytesWrite);
+					FPlatformMisc::MemoryBarrier();
 
-			// TODO: do with no pending data
+					if (pPacket->IsValid())
+					{
+						ServoProtocol->Push(pPacket);
+					}
+					else {
+						// packet is illegal, dealloc shared pointer
+						ServoProtocol->DeallockNetPacket(pPacket);
+					}
+				}
+			}
+			else {
+				//Error: pendingDataSize>0 Rcev failed
+				UE_LOG(LogTemp, Display, TEXT("FConnectThread: pending data size > 0, rcev failed. Check the length of ReceivedData.Num()"));
+			}
 			
 			// TODO: check disconnect
 		}
@@ -86,6 +122,7 @@ uint32 FConnectThread::Run()
 
 void FConnectThread::Stop()
 {
+	UE_LOG(LogTemp, Display, TEXT("FConnectThread: call stop!!!\n"));
 	if (!bStopped) {
 		TimeToDie = true;
 		// call father function
@@ -107,46 +144,58 @@ void FConnectThread::Exit()
 {
 	LifecycleStep.Set(3);
 	// cleanup socket
-	if (nullptr != ConnectSocket)
-	{
-		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ConnectSocket);
-		ConnectSocket = nullptr;
-	}
+	SafeDestorySocket();
 	UE_LOG(LogTemp, Display, TEXT("FConnectThread: exit()\n"));
+
+	LifecycleStep.Set(4);
 }
 
 bool FConnectThread::KillThread()
 {
-	if (bKillDone) {
+	UE_LOG(LogTemp, Display, TEXT("FConnectThread: call kill!!!\n"));
+	// bKillDone maybe 0
+	if (1 == bKillDone.Increment()) {
+		// bKillDone at least 1, thread safe
 		TimeToDie = true;
 
 		if (nullptr != Thread)
 		{
+			// close socket
+			/*
+			if (nullptr != ConnectSocket && !bStopped)
+			{
+				ConnectSocket->Shutdown(ESocketShutdownMode::ReadWrite);
+			}
+			*/
+			Stop();
+
 			// Trigger the thread so that it will come out of the wait state if
 			// it isn't actively doing work
 			//if(event) event->Trigger();
 
-			// If waiting was specified, wait the amount of time. If that fails,
-			// brute force kill that thread. Very bad as that might leak.
+			// Block until this thread exits()
 			Thread->WaitForCompletion();
 
 			// Clean up the event
 			// if(event) FPlatformProcess::ReturnSynchEventToPool(event);
 			// event = nullptr;
 
-			// here will call Stop()
+			// here will call Stop() again for safe close handle
 			delete Thread;
 			Thread = nullptr;
-
-			// close socket
-			ConnectSocket->Shutdown(ESocketShutdownMode::ReadWrite);
-			ConnectSocket->Close();
 		}
 
-		bKillDone = true;
+		// make sure bKillDone at least 2, thread safe
+		bKillDone.Increment();
 	}
 
-	return bKillDone;
+	if (bKillDone.GetValue() > 100)
+	{
+		// defend killdone overflow
+		bKillDone.Set(2);
+	}
+
+	return bKillDone.GetValue() > 1;
 }
 
 FConnectThread * FConnectThread::Create(FSocket * InSocket, FIPv4Address & InIP, int32 InPort, int32 InRank)
@@ -171,24 +220,53 @@ FConnectThread * FConnectThread::Create(FSocket * InSocket, FIPv4Address & InIP,
 bool FConnectThread::IsSocketConnection()
 {
 	if (ConnectSocket)
-	{
+	{	// TODO: FIX BUG cause fatal error here, address = 0xffffffff
 		if (ConnectSocket->GetConnectionState() == ESocketConnectionState::SCS_Connected)
 		{
 			return true;
 		}
+		else {
+			UE_LOG(LogTemp, Display, TEXT("FConnectThread: connect socket's state is not SCS_Connected\n"));
+		}
 	}
+
+	if (ConnectSocket == nullptr)
+	{
+		UE_LOG(LogTemp, Display, TEXT("FConnectThread: socket = null\n"));
+	}
+	UE_LOG(LogTemp, Display, TEXT("FConnectThread: detect disconnect\n"));
+
 	return false;
+}
+
+bool FConnectThread::IsKillCalled()
+{
+	return bKillDone.GetValue() > 0;
 }
 
 bool FConnectThread::IsKillDone()
 {
-	bool ret = bKillDone;
-	return ret;
+	return bKillDone.GetValue() > 1;
+}
+
+bool FConnectThread::IsExited()
+{
+	return LifecycleStep.GetValue() >= 4;
 }
 
 int32 FConnectThread::GetRankID() const
 {
 	return RankId;
+}
+
+void FConnectThread::SafeDestorySocket()
+{
+	if (nullptr != ConnectSocket)
+	{
+		ConnectSocket->Close();
+		ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->DestroySocket(ConnectSocket);
+		ConnectSocket = nullptr;
+	}
 }
 
 
