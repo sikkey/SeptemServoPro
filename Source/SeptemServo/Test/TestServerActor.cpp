@@ -17,7 +17,8 @@ ATestServerActor::ATestServerActor()
 
 	bCleanup = true;
 
-	LastPacket = FServoProtocol::Get()->AllocNetPacket();
+	LastPacket = TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>(new FSNetPacket());
+	//FServoProtocol::Get()->AllocNetPacket();
 }
 
 // Called when the game starts or when spawned
@@ -33,6 +34,7 @@ void ATestServerActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	//release thread
 	ShutdownServer();
+	FServoProtocol::Get()->DeallockNetPacket(LastPacket);
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -45,10 +47,8 @@ void ATestServerActor::Tick(float DeltaTime)
 	TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> newPacket;
 	if (FServoProtocol::Get()->Pop(newPacket))
 	{
-		//TODO: deallcok net packet crack!  TSharedPtr IsValid() check false meas LastPacket = nullptr
 		FServoProtocol::Get()->DeallockNetPacket(LastPacket);
-		LastPacket = newPacket;
-		UE_LOG(LogTemp, Display, TEXT("ATestServerActor: DeallockNetPacket End \n"));
+		LastPacket = MoveTemp(newPacket);
 	}
 }
 

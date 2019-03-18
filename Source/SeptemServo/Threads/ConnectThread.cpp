@@ -96,7 +96,15 @@ uint32 FConnectThread::Run()
 					pPacket->ReUse(ReceivedData.GetData(), ReceivedData.Num(), BytesWrite);
 					UE_LOG(LogTemp, Display, TEXT("FConnectThread: write bytes %d \n"), BytesWrite);
 					FPlatformMisc::MemoryBarrier();
-					ServoProtocol->Push(pPacket);
+
+					if (pPacket->IsValid())
+					{
+						ServoProtocol->Push(pPacket);
+					}
+					else {
+						// packet is illegal, dealloc shared pointer
+						ServoProtocol->DeallockNetPacket(pPacket);
+					}
 				}
 			}
 			else {
