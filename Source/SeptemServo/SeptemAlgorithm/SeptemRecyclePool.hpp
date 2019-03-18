@@ -27,7 +27,7 @@ namespace Septem
 
 			ptrPool.Reset(InNum);
 			
-			for (int32 i = 0; i < ptrPool.Num(); ++i)
+			for (int32 i = 0; i < InNum; ++i)
 			{
 				TSharedPtr<T, InMode> ptr(new T());
 				ptrPool.Add(ptr);
@@ -49,8 +49,11 @@ namespace Septem
 			{
 				poolCriticalSection.Lock();
 				if (ptrPool.Num() > 0)
-				{
-					return ptrPool.Pop(false);
+				{				
+					TSharedPtr<T, InMode> popPtr(ptrPool.Pop(false));
+					poolCriticalSection.Unlock();
+
+					return popPtr;
 				}
 				poolCriticalSection.Unlock();
 

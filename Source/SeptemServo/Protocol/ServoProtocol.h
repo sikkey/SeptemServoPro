@@ -234,5 +234,6 @@ protected:
 
 	// force to push/pop TSharedPtr
 	TNetPacketPool<FSNetPacket, ESPMode::ThreadSafe>* PacketPool;
+	int32 PacketPoolCount;
 	Septem::TSharedRecyclePool<FSNetPacket, ESPMode::ThreadSafe> RecyclePool;
 };

@@ -349,6 +349,7 @@ uint8 FSNetBufferFoot::XOR()
 
 FServoProtocol::FServoProtocol()
 	:RecyclePool(RecyclePoolMaxnum)
+	, PacketPoolCount(0)
 {
 	check(pSingleton == nullptr && "Protocol singleton can't create 2 object!");
 	pSingleton = this;
@@ -394,17 +395,29 @@ FServoProtocol & FServoProtocol::SingletonRef()
 
 bool FServoProtocol::Push(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> InNetPacket)
 {
-	return PacketPool->Push(InNetPacket);
+	if (PacketPool->Push(InNetPacket))
+	{
+		++PacketPoolCount;
+		return true;
+	}
+
+	return false;
 }
 
 bool FServoProtocol::Pop(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& OutNetPacket)
 {
-	return PacketPool->Pop(OutNetPacket);
+	if (PacketPool->Pop(OutNetPacket))
+	{
+		--PacketPoolCount;
+		return true;
+	}
+
+	return false;
 }
 
 int32 FServoProtocol::PacketPoolNum()
 {
-	return PacketPool->Num();
+	return PacketPoolCount;
 }
 
 TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> FServoProtocol::AllocNetPacket()
