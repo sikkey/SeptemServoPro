@@ -209,4 +209,14 @@ int32 ATestServerActor::GetReserved()
 	return int32();
 }
 
+int32 ATestServerActor::GetPacketPoolNum()
+{
+	return FServoProtocol::Get()->PacketPoolNum();
+}
+
+int32 ATestServerActor::GetRecyclePoolNum()
+{
+	return FServoProtocol::Get()->RecyclePoolNum();
+}
+
 

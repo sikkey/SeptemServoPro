@@ -91,6 +91,12 @@ namespace Septem
 			}
 		}
 
+		// not thread safe
+		int32 Num()
+		{
+			return ptrPool.Num();
+		}
+
 	private:
 
 		// not thread safe

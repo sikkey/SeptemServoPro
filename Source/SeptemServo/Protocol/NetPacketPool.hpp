@@ -25,6 +25,8 @@ public:
 	virtual bool Pop(TSharedPtr<T, InMode>& OutSharedPtr) = 0;
 	// may not Thread-safe
 	virtual bool IsEmpty() = 0;
+	// may not Thread-safe
+	virtual int32 Num() = 0;
 };
 
 /**
@@ -38,21 +40,25 @@ class SEPTEMSERVO_API TNetPacketQueue
 public:
 	FORCEINLINE TNetPacketQueue()
 		: TNetPacketPool()
+		, Count(0)
 	{
 	}
 
 	virtual ~TNetPacketQueue()
 	{
 		packetPool.Empty();
+		Count = 0;
 	}
 
-	bool Push(const TSharedPtr<T, InMode>& InSharedPtr) override
+	virtual bool Push(const TSharedPtr<T, InMode>& InSharedPtr) override
 	{
+		++Count;
 		return packetPool.Enqueue(InSharedPtr);
 	}
 
-	bool Pop(TSharedPtr<T, InMode>& OutSharedPtr) override
+	virtual bool Pop(TSharedPtr<T, InMode>& OutSharedPtr) override
 	{
+		--Count;
 		return packetPool.Dequeue(OutSharedPtr);
 	}
 
@@ -61,8 +67,14 @@ public:
 		return packetPool.IsEmpty();
 	}
 
+	virtual int32 Num() override
+	{
+		return Count;
+	}
+
 private:
 	TQueue<TSharedPtr<T, InMode>, EQueueMode::Mpsc > packetPool;
+	int32 Count;
 };
 
 
@@ -109,6 +121,10 @@ public:
 		return heapPool.Num() > 0;
 	}
 
+	virtual int32 Num() override
+	{
+		heapPool.Num();
+	}
 	
 private:
 	TArray<TSharedPtr<T, InMode> > heapPool;

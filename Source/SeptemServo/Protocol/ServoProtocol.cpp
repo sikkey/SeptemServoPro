@@ -402,6 +402,11 @@ bool FServoProtocol::Pop(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& OutNetPac
 	return PacketPool->Pop(OutNetPacket);
 }
 
+int32 FServoProtocol::PacketPoolNum()
+{
+	return PacketPool->Num();
+}
+
 TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> FServoProtocol::AllocNetPacket()
 {
 	return RecyclePool.Alloc();
@@ -425,6 +430,11 @@ void FServoProtocol::DeallockNetPacket(const TSharedPtr<FSNetPacket, ESPMode::Th
 		RecyclePool.Dealloc(InSharedPtr);
 		UE_LOG(LogTemp, Display, TEXT("recycle end"));
 	}
+}
+
+int32 FServoProtocol::RecyclePoolNum()
+{
+	return RecyclePool.Num();
 }
 
 FServoProtocol* FServoProtocol::pSingleton = nullptr;

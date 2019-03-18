@@ -87,4 +87,10 @@ public:
 		int32 GetSize();
 	UFUNCTION(BlueprintCallable, Category = "Server")
 		int32 GetReserved();
+
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		int32 GetPacketPoolNum();
+
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		int32 GetRecyclePoolNum();
 };

@@ -216,6 +216,7 @@ public:
 	bool Push(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> InNetPacket);
 	// pop from packet pool
 	bool Pop(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& OutNetPacket);
+	int32 PacketPoolNum();
 
 	//=========================================
 	//		Net Packet Pool Memory Management
@@ -226,7 +227,7 @@ public:
 	TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> AllocNetPacket();
 	// recycle dealloc
 	void DeallockNetPacket(const TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& InSharedPtr, bool bForceRecycle = false);
-
+	int32 RecyclePoolNum();
 protected:
 	static FServoProtocol* pSingleton;
 	static FCriticalSection mCriticalSection;
