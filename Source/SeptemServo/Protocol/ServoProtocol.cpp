@@ -430,18 +430,18 @@ void FServoProtocol::DeallockNetPacket(const TSharedPtr<FSNetPacket, ESPMode::Th
 	if (!InSharedPtr.IsValid())
 		return;
 
-	UE_LOG(LogTemp, Display, TEXT("OnDeallocBegin"));
+	//UE_LOG(LogTemp, Display, TEXT("OnDeallocBegin"));
 	InSharedPtr->OnDealloc();
-	UE_LOG(LogTemp, Display, TEXT("OnDeallocEnd"));
+	//UE_LOG(LogTemp, Display, TEXT("OnDeallocEnd"));
 	if (bForceRecycle)
 	{
 		RecyclePool.DeallocForceRecycle(InSharedPtr);
 	}
 	else 
 	{
-		UE_LOG(LogTemp, Display, TEXT("recycle begin"));
+		//UE_LOG(LogTemp, Display, TEXT("recycle begin"));
 		RecyclePool.Dealloc(InSharedPtr);
-		UE_LOG(LogTemp, Display, TEXT("recycle end"));
+		//UE_LOG(LogTemp, Display, TEXT("recycle end"));
 	}
 }
 
