@@ -181,6 +181,7 @@ struct FSNetPacket
 	void OnDealloc();
 	void OnAlloc();
 	void ReUseAsHeartbeat(int32 InSyncword = DEFAULT_SYNCWORD_INT32);
+	bool operator < (const FSNetPacket& Other);
 };
 
 /************************************************************/

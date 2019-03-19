@@ -319,6 +319,11 @@ void FSNetPacket::ReUseAsHeartbeat(int32 InSyncword)
 	Head.fastcode = Head.XOR();
 }
 
+bool FSNetPacket::operator<(const FSNetPacket & Other)
+{
+	return Foot.timestamp < Other.Foot.timestamp;
+}
+
 bool FSNetBufferFoot::MemRead(uint8 * Data, int32 BufferSize)
 {
 	const int32 ReadSize = sizeof(FSNetBufferFoot);
