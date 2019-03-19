@@ -389,6 +389,7 @@ FServoProtocol::FServoProtocol()
 FServoProtocol::~FServoProtocol()
 {
 	pSingleton = nullptr;
+	delete PacketPool;
 }
 
 FServoProtocol * FServoProtocol::Get()
