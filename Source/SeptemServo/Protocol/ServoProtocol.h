@@ -45,6 +45,7 @@ struct FSNetBufferHead
 	FORCEINLINE static int32 MemSize();
 	uint8 XOR();
 	void Reset();
+	int32 SessionID();
 };
 #pragma pack(pop)
 
@@ -132,6 +133,8 @@ struct FSNetBufferFoot
 
 		timestamp = 0ui64;
 	}
+
+	void SetNow();
 };
 #pragma pack(pop)
 
@@ -144,7 +147,7 @@ struct FSNetBufferFoot
 			size == 0
 			reserved = client input 32bit session
 
-		recv buffer no body & foot
+		recv buffer no body
 		[foot]
 			(signature)
 			timestamp = FPlatformTime::Cycles64(); // when create
@@ -165,6 +168,8 @@ struct FSNetPacket
 
 	// check data integrity with fastcode
 	static bool FastIntegrity(uint8* DataPtr, int32 DataLength, uint8 fastcode);
+
+	bool CheckIntegrity();
 
 	FSNetPacket()
 		: sid (0)
@@ -227,6 +232,7 @@ public:
 
 	// please call ReUse or set value manulity after recycle alloc
 	TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> AllocNetPacket();
+	TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> AllocHeartbeat();
 	// recycle dealloc
 	void DeallockNetPacket(const TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& InSharedPtr, bool bForceRecycle = false);
 	int32 RecyclePoolNum();
@@ -240,6 +246,8 @@ public:
 protected:
 	static FServoProtocol* pSingleton;
 	static FCriticalSection mCriticalSection;
+
+	int32 Syncword;
 
 	// force to push/pop TSharedPtr
 	TNetPacketPool<FSNetPacket, ESPMode::ThreadSafe>* PacketPool;

@@ -50,7 +50,8 @@ namespace Septem
 				poolCriticalSection.Lock();
 				if (ptrPool.Num() > 0)
 				{				
-					TSharedPtr<T, InMode> popPtr(ptrPool.Pop(false));
+					//TSharedPtr<T, InMode> popPtr(ptrPool.Pop(false));
+					TSharedPtr<T, InMode>&& popPtr = ptrPool.Pop(false);
 					poolCriticalSection.Unlock();
 
 					return popPtr;
