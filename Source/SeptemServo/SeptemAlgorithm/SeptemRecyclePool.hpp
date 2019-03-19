@@ -62,35 +62,46 @@ namespace Septem
 			return PopOrCreate();
 		}
 
-		// Thread safe when InMode = ESPMode::ThreadSafe
+		/* 
+		*	Thread safe when InMode = ESPMode::ThreadSafe
+		*	ensure the InSharedPtr is valid
+		*/
 		void Dealloc(const TSharedPtr<T, InMode>& InSharedPtr)
 		{
-			if (InMode == ESPMode::ThreadSafe)
+			if (InSharedPtr.IsValid())
 			{
-				FScopeLock lockPool(&poolCriticalSection);
-				if (ptrPool.GetSlack() > 0)
+				if (InMode == ESPMode::ThreadSafe)
 				{
-					ptrPool.Push(InSharedPtr);
+					FScopeLock lockPool(&poolCriticalSection);
+					if (ptrPool.GetSlack() > 0)
+					{
+						ptrPool.Push(InSharedPtr);
+					}
 				}
-			}
-			else {
-				if (ptrPool.GetSlack() > 0)
-				{
-					ptrPool.Push(InSharedPtr);
+				else {
+					if (ptrPool.GetSlack() > 0)
+					{
+						ptrPool.Push(InSharedPtr);
+					}
 				}
 			}
 		}
 
-		// Thread safe when InMode = ESPMode::ThreadSafe
+		/*
+		*	Thread safe when InMode = ESPMode::ThreadSafe
+		*	ensure the InSharedPtr is valid
+		*/
 		void DeallocForceRecycle(const TSharedPtr<T, InMode>& InSharedPtr)
 		{
-			if (InMode == ESPMode::ThreadSafe)
-			{
-				FScopeLock lockPool(&poolCriticalSection);
-				ptrPool.Push(InSharedPtr);
-			}
-			else {
-				ptrPool.Push(InSharedPtr);
+			if (InSharedPtr.IsValid()) {
+				if (InMode == ESPMode::ThreadSafe)
+				{
+					FScopeLock lockPool(&poolCriticalSection);
+					ptrPool.Push(InSharedPtr);
+				}
+				else {
+					ptrPool.Push(InSharedPtr);
+				}
 			}
 		}
 
@@ -114,6 +125,7 @@ namespace Septem
 		}
 
 		// stack of shared ptr object 
+		// ensure every sharedptr in pool is valid
 		TArray< TSharedPtr<T, InMode> >  ptrPool;
 		FCriticalSection poolCriticalSection;
 	};

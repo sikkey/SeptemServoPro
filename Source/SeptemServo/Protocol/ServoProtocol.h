@@ -229,6 +229,13 @@ public:
 	// recycle dealloc
 	void DeallockNetPacket(const TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& InSharedPtr, bool bForceRecycle = false);
 	int32 RecyclePoolNum();
+
+	//=========================================
+	//		Net Packet Pool & Recycle Pool Union Control
+	//=========================================
+
+	// pop from packetpool to OutRecyclePacket, auto recycle
+	bool PopWithRecycle(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& OutRecyclePacket);
 protected:
 	static FServoProtocol* pSingleton;
 	static FCriticalSection mCriticalSection;

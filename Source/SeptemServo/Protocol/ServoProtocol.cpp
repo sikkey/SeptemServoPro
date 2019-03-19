@@ -450,6 +450,19 @@ int32 FServoProtocol::RecyclePoolNum()
 	return RecyclePool.Num();
 }
 
+bool FServoProtocol::PopWithRecycle(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& OutRecyclePacket)
+{
+	TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> newPacket;
+	if (Pop(newPacket))
+	{
+		DeallockNetPacket(OutRecyclePacket);
+		OutRecyclePacket = MoveTemp(newPacket);
+		return true;
+	}
+
+	return false;
+}
+
 FServoProtocol* FServoProtocol::pSingleton = nullptr;
 FCriticalSection FServoProtocol::mCriticalSection;
 int32 FServoProtocol::RecyclePoolMaxnum = 1024;
