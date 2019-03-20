@@ -89,6 +89,9 @@ public:
 		int32 GetReserved();
 
 	UFUNCTION(BlueprintCallable, Category = "Server")
+		int32 GetTimestamp(int32 InPart = 0);
+
+	UFUNCTION(BlueprintCallable, Category = "Server")
 		int32 GetPacketPoolNum();
 
 	UFUNCTION(BlueprintCallable, Category = "Server")

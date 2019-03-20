@@ -210,7 +210,8 @@ FSNetPacket * FSNetPacket::CreateHeartbeat(int32 InSyncword)
 	//packet->Head.reserved = FPlatformTime::Cycles();
 	//packet->Foot.timestamp = FPlatformTime::Cycles64();
 	//double now = FPlatformTime::Seconds();
-	packet->Foot.timestamp = FDateTime::UtcNow().ToUnixTimestamp();
+	//packet->Foot.timestamp = FDateTime::UtcNow().ToUnixTimestamp();
+	packet->Foot.SetNow();
 
 	// No need body xor
 	packet->Head.fastcode = packet->Head.XOR() ^ packet->Foot.XOR();
