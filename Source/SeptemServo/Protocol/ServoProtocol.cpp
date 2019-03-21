@@ -374,7 +374,7 @@ void FSNetBufferFoot::SetNow()
 #endif // SERVO_PROTOCOL_SIGNATURE
 	//timestamp = FPlatformTime::Cycles64();
 	//double now = FPlatformTime::Seconds();
-	timestamp = FDateTime::UtcNow().ToUnixTimestamp();
+	timestamp = Septem::UnixTimestampMillisecond(); //(FDateTime::UtcNow().GetTicks() - FDateTime(1970, 1, 1).GetTicks())/ETimespan::TicksPerMillisecond;
 }
 
 FServoProtocol::FServoProtocol()
