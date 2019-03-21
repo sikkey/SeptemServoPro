@@ -89,12 +89,15 @@ uint32 FConnectThread::Run()
 				// TODO: recv data for while every syncword
 				UE_LOG(LogTemp, Display, TEXT("FConnectThread: receive byte = %d length = %d\n"), ReceivedData.GetData()[0], ReceivedData.Num());
 				
-				int32 BytesWrite = 0;
-				while (BytesWrite < BytesRead)
+				int32 TotalBytesRead = 0;
+				int32 RecivedBytesRead = 0;
+				while (TotalBytesRead < BytesRead && ServoProtocol->PacketPoolNum() < SERVO_PROTOCOL_PACKET_POOL_MAX)
 				{
 					TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> pPacket(ServoProtocol->AllocNetPacket());
-					pPacket->ReUse(ReceivedData.GetData(), ReceivedData.Num(), BytesWrite);
-					UE_LOG(LogTemp, Display, TEXT("FConnectThread: write bytes %d \n"), BytesWrite);
+					pPacket->ReUse(ReceivedData.GetData() + TotalBytesRead, ReceivedData.Num(), RecivedBytesRead);
+					TotalBytesRead += RecivedBytesRead;
+					UE_LOG(LogTemp, Display, TEXT("FConnectThread: write bytes %d, total write bytes %d \n"), RecivedBytesRead, TotalBytesRead);
+					
 					FPlatformMisc::MemoryBarrier();
 
 					if (pPacket->IsValid())

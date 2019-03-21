@@ -13,6 +13,18 @@
 #define DEFAULT_SYNCWORD_INT32 0xE6B7F1A2
 #endif // !DEFAULT_SYNCWORD_INT32
 
+/*
+* Setting max in packet pool
+* Defend memory boom
+* Pool Healthy = pool.num() / max
+* Healthy > 60% means dangerous 
+* if max is too small, server will lose packets
+*/
+#ifndef SERVO_PROTOCOL_PACKET_POOL_MAX
+#define SERVO_PROTOCOL_PACKET_POOL_MAX 1024
+#endif // !SERVO_PROTOCOL_PACKET_POOL_MAX
+
+
 
 /***************************************/
 // net buffer design:
