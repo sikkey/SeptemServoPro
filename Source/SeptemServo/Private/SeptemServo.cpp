@@ -22,6 +22,6 @@ void FSeptemServoModule::ShutdownModule()
 #ifdef SEPTEM_SERVO_PLUGIN
 IMPLEMENT_MODULE(FSeptemServoModule, SeptemServo)
 #else
-IMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, SeptemServo, "SeptemServo");
+IMPLEMENT_PRIMARY_GAME_MODULE(FSeptemServoModule, SeptemServo, "SeptemServo");
 #endif // SEPTEM_SERVO_PLUGIN
 
