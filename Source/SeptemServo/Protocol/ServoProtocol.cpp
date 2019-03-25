@@ -2,7 +2,7 @@
 
 #include "ServoProtocol.h"
 
-#include "SeptemAlgorithm/SeptemAlgorithm.h"
+#include "../SeptemAlgorithm/SeptemAlgorithm.h"
 using namespace Septem;
 
 #include "Misc/ScopeLock.h"

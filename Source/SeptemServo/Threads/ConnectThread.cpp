@@ -1,7 +1,7 @@
 // Copyright (c) 2013-2019 7Mersenne All Rights Reserved.
 
 #include "ConnectThread.h"
-#include "Protocol/ServoProtocol.h"
+#include "../Protocol/ServoProtocol.h"
 
 // default buffer max  = 1mb
 int32 FConnectThread::MaxReceivedCount = 1024 * 1024;

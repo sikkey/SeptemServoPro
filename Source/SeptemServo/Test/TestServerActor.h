@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "../Threads/ListenThread.h"
-#include "Protocol/ServoProtocol.h"
+#include "../Protocol/ServoProtocol.h"
 #include "TestServerActor.generated.h"
 
 UCLASS()
