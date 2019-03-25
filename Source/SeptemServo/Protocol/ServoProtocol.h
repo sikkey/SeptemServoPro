@@ -33,7 +33,7 @@
 // (optional) buffer foot
 /***************************************/
 #pragma pack(push, 1)
-struct FSNetBufferHead
+struct SEPTEMSERVO_API FSNetBufferHead
 {
 	int32 syncword; // combine with 4 char(uint8).  make them differents to get efficient  
 	uint8 version;
@@ -74,6 +74,13 @@ union UnionSyncword
 	int32 value;
 };
 
+union Union32
+{
+	uint8 byte[4]; // 4 char
+	int32 v_int32;
+	float v_float;
+};
+
 //0xE6B7F1A2	little endian
 static UnionSyncword SyncwordDefault =
 #if PLATFORM_LITTLE_ENDIAN > 0
@@ -83,7 +90,7 @@ static UnionSyncword SyncwordDefault =
 #endif
 
 
-struct FSNetBufferBody
+struct SEPTEMSERVO_API FSNetBufferBody
 {
 	uint8* bufferPtr;
 	int32 length; // lenght == BufferHead.size;
@@ -104,6 +111,36 @@ struct FSNetBufferBody
 	uint8 XOR();
 
 	void Reset();
+
+	bool GetInt32(int32 InIndex, int32& OutValue)
+	{
+		if (InIndex + 4 < length)
+		{
+			OutValue = 0;
+			for (int32 i = 0; i < 4; ++i)
+			{
+				int32 n = bufferPtr[InIndex + i];
+				OutValue += n << (i * 8);
+			}
+			return true;
+		}
+		return false;
+	}
+
+	bool GetFloat(int32 InIndex, float& OutValue)
+	{
+		Union32 m_float = { 0 };
+		if (InIndex + 4 < length)
+		{
+			for (int32 i = 0; i < 4; ++i)
+			{
+				m_float.byte[i] = bufferPtr[InIndex + i];
+			}
+			OutValue = m_float.v_float;
+			return true;
+		}
+		return false;
+	}
 };
 
 /***************************************************/
@@ -115,7 +152,7 @@ struct FSNetBufferBody
 */
 /***************************************************/
 #pragma pack(push, 1)
-struct FSNetBufferFoot
+struct SEPTEMSERVO_API FSNetBufferFoot
 {
 // if use version, makesure #if SERVO_PROTOCOL_VERSION > 1 
 #ifdef SERVO_PROTOCOL_SIGNATURE
@@ -166,7 +203,7 @@ struct FSNetBufferFoot
 		[session]
 */
 /************************************************************/
-struct FSNetPacket
+struct SEPTEMSERVO_API FSNetPacket
 {
 	FSNetBufferHead Head;
 	FSNetBufferBody Body;

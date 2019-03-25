@@ -17,6 +17,11 @@ void FSeptemServoModule::ShutdownModule()
 	// we call this function before unloading the module.
 }
 
+FServoProtocol * FSeptemServoModule::ProtocolSingleton()
+{
+	return FServoProtocol::Get();
+}
+
 #undef LOCTEXT_NAMESPACE
 
 #ifdef SEPTEM_SERVO_PLUGIN

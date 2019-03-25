@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 //#include "EngineUtils.h"
 #include "Networking.h"
+#include "../Protocol/ServoProtocol.h"
 #include "Modules/ModuleManager.h"
 
 class FSeptemServoModule : public IModuleInterface
@@ -14,4 +15,6 @@ public:
 	/** IModuleInterface implementation */
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
+
+	static FServoProtocol* ProtocolSingleton();
 };
