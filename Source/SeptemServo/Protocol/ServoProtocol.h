@@ -114,7 +114,7 @@ struct SEPTEMSERVO_API FSNetBufferBody
 
 	bool GetInt32(int32 InIndex, int32& OutValue)
 	{
-		if (InIndex + 4 < length)
+		if (InIndex + 3 < length)
 		{
 			OutValue = 0;
 			for (int32 i = 0; i < 4; ++i)
@@ -130,7 +130,7 @@ struct SEPTEMSERVO_API FSNetBufferBody
 	bool GetFloat(int32 InIndex, float& OutValue)
 	{
 		Union32 m_float = { 0 };
-		if (InIndex + 4 < length)
+		if (InIndex + 3 < length)
 		{
 			for (int32 i = 0; i < 4; ++i)
 			{
