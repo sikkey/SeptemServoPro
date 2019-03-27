@@ -209,6 +209,20 @@ int32 ATestServerActor::GetReserved()
 	return int32();
 }
 
+int32 ATestServerActor::GetTimestamp(int32 InPart)
+{
+	if (LastPacket.Get())
+	{
+		if (InPart) {
+			return LastPacket.Get()->Foot.timestamp >> 32 ;
+		}
+		else {
+			return LastPacket.Get()->Foot.timestamp & 0xffffffff;
+		}
+	}
+	return int32();
+}
+
 int32 ATestServerActor::GetPacketPoolNum()
 {
 	return FServoProtocol::Get()->PacketPoolNum();

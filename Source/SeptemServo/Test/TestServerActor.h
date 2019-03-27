@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "../Threads/ListenThread.h"
-#include "Protocol/ServoProtocol.h"
+#include "../Protocol/ServoProtocol.h"
 #include "TestServerActor.generated.h"
 
 UCLASS()
@@ -87,6 +87,9 @@ public:
 		int32 GetSize();
 	UFUNCTION(BlueprintCallable, Category = "Server")
 		int32 GetReserved();
+
+	UFUNCTION(BlueprintCallable, Category = "Server")
+		int32 GetTimestamp(int32 InPart = 0);
 
 	UFUNCTION(BlueprintCallable, Category = "Server")
 		int32 GetPacketPoolNum();

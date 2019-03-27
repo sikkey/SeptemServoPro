@@ -5,13 +5,25 @@
 #include "CoreMinimal.h"
 
 #include "NetPacketPool.hpp"
-#include "SeptemAlgorithm/SeptemAlgorithm.h"
+#include "../SeptemAlgorithm/SeptemAlgorithm.h"
 
 //#define SERVO_PROTOCOL_SIGNATURE
 
 #ifndef DEFAULT_SYNCWORD_INT32
 #define DEFAULT_SYNCWORD_INT32 0xE6B7F1A2
 #endif // !DEFAULT_SYNCWORD_INT32
+
+/*
+* Setting max in packet pool
+* Defend memory boom
+* Pool Healthy = pool.num() / max
+* Healthy > 60% means dangerous 
+* if max is too small, server will lose packets
+*/
+#ifndef SERVO_PROTOCOL_PACKET_POOL_MAX
+#define SERVO_PROTOCOL_PACKET_POOL_MAX 1024
+#endif // !SERVO_PROTOCOL_PACKET_POOL_MAX
+
 
 
 /***************************************/
@@ -21,7 +33,7 @@
 // (optional) buffer foot
 /***************************************/
 #pragma pack(push, 1)
-struct FSNetBufferHead
+struct SEPTEMSERVO_API FSNetBufferHead
 {
 	int32 syncword; // combine with 4 char(uint8).  make them differents to get efficient  
 	uint8 version;
@@ -45,6 +57,7 @@ struct FSNetBufferHead
 	FORCEINLINE static int32 MemSize();
 	uint8 XOR();
 	void Reset();
+	int32 SessionID();
 };
 #pragma pack(pop)
 
@@ -61,6 +74,13 @@ union UnionSyncword
 	int32 value;
 };
 
+union Union32
+{
+	uint8 byte[4]; // 4 char
+	int32 v_int32;
+	float v_float;
+};
+
 //0xE6B7F1A2	little endian
 static UnionSyncword SyncwordDefault =
 #if PLATFORM_LITTLE_ENDIAN > 0
@@ -70,7 +90,7 @@ static UnionSyncword SyncwordDefault =
 #endif
 
 
-struct FSNetBufferBody
+struct SEPTEMSERVO_API FSNetBufferBody
 {
 	uint8* bufferPtr;
 	int32 length; // lenght == BufferHead.size;
@@ -91,6 +111,36 @@ struct FSNetBufferBody
 	uint8 XOR();
 
 	void Reset();
+
+	bool GetInt32(int32 InIndex, int32& OutValue)
+	{
+		if (InIndex + 3 < length)
+		{
+			OutValue = 0;
+			for (int32 i = 0; i < 4; ++i)
+			{
+				int32 n = bufferPtr[InIndex + i];
+				OutValue += n << (i * 8);
+			}
+			return true;
+		}
+		return false;
+	}
+
+	bool GetFloat(int32 InIndex, float& OutValue)
+	{
+		Union32 m_float = { 0 };
+		if (InIndex + 3 < length)
+		{
+			for (int32 i = 0; i < 4; ++i)
+			{
+				m_float.byte[i] = bufferPtr[InIndex + i];
+			}
+			OutValue = m_float.v_float;
+			return true;
+		}
+		return false;
+	}
 };
 
 /***************************************************/
@@ -102,7 +152,7 @@ struct FSNetBufferBody
 */
 /***************************************************/
 #pragma pack(push, 1)
-struct FSNetBufferFoot
+struct SEPTEMSERVO_API FSNetBufferFoot
 {
 // if use version, makesure #if SERVO_PROTOCOL_VERSION > 1 
 #ifdef SERVO_PROTOCOL_SIGNATURE
@@ -132,6 +182,8 @@ struct FSNetBufferFoot
 
 		timestamp = 0ui64;
 	}
+
+	void SetNow();
 };
 #pragma pack(pop)
 
@@ -144,14 +196,14 @@ struct FSNetBufferFoot
 			size == 0
 			reserved = client input 32bit session
 
-		recv buffer no body & foot
+		recv buffer no body
 		[foot]
 			(signature)
 			timestamp = FPlatformTime::Cycles64(); // when create
 		[session]
 */
 /************************************************************/
-struct FSNetPacket
+struct SEPTEMSERVO_API FSNetPacket
 {
 	FSNetBufferHead Head;
 	FSNetBufferBody Body;
@@ -165,6 +217,8 @@ struct FSNetPacket
 
 	// check data integrity with fastcode
 	static bool FastIntegrity(uint8* DataPtr, int32 DataLength, uint8 fastcode);
+
+	bool CheckIntegrity();
 
 	FSNetPacket()
 		: sid (0)
@@ -181,6 +235,7 @@ struct FSNetPacket
 	void OnDealloc();
 	void OnAlloc();
 	void ReUseAsHeartbeat(int32 InSyncword = DEFAULT_SYNCWORD_INT32);
+	bool operator < (const FSNetPacket& Other);
 };
 
 /************************************************************/
@@ -226,12 +281,22 @@ public:
 
 	// please call ReUse or set value manulity after recycle alloc
 	TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> AllocNetPacket();
+	TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> AllocHeartbeat();
 	// recycle dealloc
 	void DeallockNetPacket(const TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& InSharedPtr, bool bForceRecycle = false);
 	int32 RecyclePoolNum();
+
+	//=========================================
+	//		Net Packet Pool & Recycle Pool Union Control
+	//=========================================
+
+	// pop from packetpool to OutRecyclePacket, auto recycle
+	bool PopWithRecycle(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& OutRecyclePacket);
 protected:
 	static FServoProtocol* pSingleton;
 	static FCriticalSection mCriticalSection;
+
+	int32 Syncword;
 
 	// force to push/pop TSharedPtr
 	TNetPacketPool<FSNetPacket, ESPMode::ThreadSafe>* PacketPool;

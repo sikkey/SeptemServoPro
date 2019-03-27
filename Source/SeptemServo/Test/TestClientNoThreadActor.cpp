@@ -2,7 +2,7 @@
 
 #include "TestClientNoThreadActor.h"
 
-#include "Protocol/ServoProtocol.h"
+#include "../Protocol/ServoProtocol.h"
 
 // Sets default values
 ATestClientNoThreadActor::ATestClientNoThreadActor()

@@ -2,7 +2,7 @@
 
 #include "ServoProtocol.h"
 
-#include "SeptemAlgorithm/SeptemAlgorithm.h"
+#include "../SeptemAlgorithm/SeptemAlgorithm.h"
 using namespace Septem;
 
 #include "Misc/ScopeLock.h"
@@ -55,8 +55,10 @@ void FSNetBufferBody::Reset()
 	{
 		delete bufferPtr;
 		bufferPtr = nullptr;
-		length = 0;
+		
 	}
+
+	length = 0;
 }
 
 FSNetBufferHead & FSNetBufferHead::operator=(const FSNetBufferHead & Other)
@@ -102,6 +104,11 @@ void FSNetBufferHead::Reset()
 	reserved = 0;
 }
 
+int32 FSNetBufferHead::SessionID()
+{
+	return reserved & ((1 << 22) - 1);
+}
+
 bool FSNetPacket::IsValid()
 {
 	return bFastIntegrity;
@@ -115,6 +122,15 @@ bool FSNetPacket::FastIntegrity(uint8 * DataPtr, int32 DataLength, uint8 fastcod
 		xor ^= DataPtr[i];
 	}
 	return xor == fastcode;
+}
+
+bool FSNetPacket::CheckIntegrity()
+{
+	if (Head.uid == 0)
+	{
+		return bFastIntegrity = (Head.XOR() ^ Foot.XOR()) == Head.fastcode;
+	}
+	return bFastIntegrity = (Head.XOR() ^ Body.XOR() ^ Foot.XOR()) == Head.fastcode;
 }
 
 FSNetPacket::FSNetPacket(uint8 * Data, int32 BufferSize, int32 & BytesRead, int32 InSyncword)
@@ -145,25 +161,23 @@ FSNetPacket::FSNetPacket(uint8 * Data, int32 BufferSize, int32 & BytesRead, int3
 
 	if (0 == Head.uid)
 	{
-		// it is a heart beat packet
-		Foot.timestamp = FPlatformTime::Cycles64();
-
-		bFastIntegrity = fastcode == 0;
-		sid = Head.reserved;
-		BytesRead = index;
-		return;
+		sid = Head.SessionID();
 	}
 
 	// 3. check and read body
 
-	if (!Body.MemRead(Data + index, BufferSize - index, Head.size))
+	if (0 != Head.uid)
 	{
-		// failed to read from the rest buffer
-		BytesRead = BufferSize;
-		return;
+		// it is not a heart beat packet
+		if (!Body.MemRead(Data + index, BufferSize - index, Head.size))
+		{
+			// failed to read from the rest buffer
+			BytesRead = BufferSize;
+			return;
+		}
+		index += Body.MemSize();
+		fastcode ^= Body.XOR();
 	}
-	index += Body.MemSize();
-	fastcode ^= Body.XOR();
 
 	// 4. read foot
 	if (!Foot.MemRead(Data + index, BufferSize - index))
@@ -177,9 +191,9 @@ FSNetPacket::FSNetPacket(uint8 * Data, int32 BufferSize, int32 & BytesRead, int3
 	fastcode ^= Foot.XOR();
 
 	BytesRead = index;
-	bFastIntegrity = fastcode == 0;
+	bFastIntegrity = 0 == fastcode;
 
-	sid = Head.reserved & ((1 << 30) - 1);
+	sid = Head.SessionID();
 
 	return;
 }
@@ -193,8 +207,14 @@ FSNetPacket * FSNetPacket::CreateHeartbeat(int32 InSyncword)
 {
 	FSNetPacket* packet = new FSNetPacket();
 	packet->Head.syncword = InSyncword;
-	packet->Head.reserved = FPlatformTime::Cycles();
-	packet->Head.fastcode = packet->Head.XOR();
+	//packet->Head.reserved = FPlatformTime::Cycles();
+	//packet->Foot.timestamp = FPlatformTime::Cycles64();
+	//double now = FPlatformTime::Seconds();
+	//packet->Foot.timestamp = FDateTime::UtcNow().ToUnixTimestamp();
+	packet->Foot.SetNow();
+
+	// No need body xor
+	packet->Head.fastcode = packet->Head.XOR() ^ packet->Foot.XOR();
 	return packet;
 }
 
@@ -228,25 +248,21 @@ void FSNetPacket::ReUse(uint8 * Data, int32 BufferSize, int32 & BytesRead, int32
 
 	if (0 == Head.uid)
 	{
-		// it is a heart beat packet
-		Foot.timestamp = FPlatformTime::Cycles64();
-
-		bFastIntegrity = fastcode == 0;
-		sid = Head.reserved;
-		BytesRead = index;
-		return;
+		sid = Head.SessionID();
 	}
 
 	// 3. check and read body
-
-	if (!Body.MemRead(Data + index, BufferSize - index, Head.size))
+	if (0 != Head.uid)
 	{
-		// failed to read from the rest buffer
-		BytesRead = BufferSize;
-		return;
+		if (!Body.MemRead(Data + index, BufferSize - index, Head.size))
+		{
+			// failed to read from the rest buffer
+			BytesRead = BufferSize;
+			return;
+		}
+		index += Body.MemSize();
+		fastcode ^= Body.XOR();
 	}
-	index += Body.MemSize();
-	fastcode ^= Body.XOR();
 
 	// 4. read foot
 	if (!Foot.MemRead(Data + index, BufferSize - index))
@@ -262,7 +278,7 @@ void FSNetPacket::ReUse(uint8 * Data, int32 BufferSize, int32 & BytesRead, int32
 	BytesRead = index;
 	bFastIntegrity = fastcode == 0;
 
-	sid = Head.reserved & ((1 << 30) - 1);
+	sid = Head.SessionID();
 
 	return;
 }
@@ -270,10 +286,10 @@ void FSNetPacket::ReUse(uint8 * Data, int32 BufferSize, int32 & BytesRead, int32
 void FSNetPacket::WriteToArray(TArray<uint8>& InBufferArr)
 {
 	int32 BytesWrite = 0;
-	int32 writeSize = sizeof(FSNetBufferHead);
+	int32 writeSize = sizeof(FSNetBufferHead) + sizeof(FSNetBufferFoot);
 	if (Head.uid > 0ui16)
 	{
-		writeSize += Body.length + sizeof(FSNetBufferFoot);
+		writeSize += Body.length;
 	}
 
 	InBufferArr.SetNumZeroed (writeSize);
@@ -282,13 +298,13 @@ void FSNetPacket::WriteToArray(TArray<uint8>& InBufferArr)
 	//1. write heads
 	FMemory::Memcpy(DataPtr, &Head, FSNetBufferHead::MemSize());
 	BytesWrite += sizeof(FSNetBufferHead);
-
-	if (Head.uid == 0)
-		return;
 	
 	//2. write Body
-	FMemory::Memcpy(DataPtr + BytesWrite, Body.bufferPtr, Body.length);
-	BytesWrite += Body.length;
+	if (Head.uid != 0)
+	{
+		FMemory::Memcpy(DataPtr + BytesWrite, Body.bufferPtr, Body.length);
+		BytesWrite += Body.length;
+	}
 
 	//3. write Foot
 	FMemory::Memcpy(DataPtr + BytesWrite, &Foot, FSNetBufferFoot::MemSize());
@@ -311,12 +327,16 @@ void FSNetPacket::OnAlloc()
 
 void FSNetPacket::ReUseAsHeartbeat(int32 InSyncword)
 {
+	Head.Reset();
 	Head.syncword = InSyncword;
-	Head.reserved = FPlatformTime::Cycles();
-	Head.size = 0;
-	Head.version = 0;
-	Head.uid = 0;
-	Head.fastcode = Head.XOR();
+	Body.Reset();
+	Foot.SetNow();
+	Head.fastcode = Head.XOR() ^ Foot.XOR();
+}
+
+bool FSNetPacket::operator<(const FSNetPacket & Other)
+{
+	return Foot.timestamp < Other.Foot.timestamp;
 }
 
 bool FSNetBufferFoot::MemRead(uint8 * Data, int32 BufferSize)
@@ -347,9 +367,20 @@ uint8 FSNetBufferFoot::XOR()
 	return ret;
 }
 
+void FSNetBufferFoot::SetNow()
+{
+#ifdef SERVO_PROTOCOL_SIGNATURE
+	memset(signature, 0, sizeof(signature));
+#endif // SERVO_PROTOCOL_SIGNATURE
+	//timestamp = FPlatformTime::Cycles64();
+	//double now = FPlatformTime::Seconds();
+	timestamp = Septem::UnixTimestampMillisecond(); //(FDateTime::UtcNow().GetTicks() - FDateTime(1970, 1, 1).GetTicks())/ETimespan::TicksPerMillisecond;
+}
+
 FServoProtocol::FServoProtocol()
 	:RecyclePool(RecyclePoolMaxnum)
 	, PacketPoolCount(0)
+	, Syncword(DEFAULT_SYNCWORD_INT32)
 {
 	check(pSingleton == nullptr && "Protocol singleton can't create 2 object!");
 	pSingleton = this;
@@ -359,6 +390,7 @@ FServoProtocol::FServoProtocol()
 FServoProtocol::~FServoProtocol()
 {
 	pSingleton = nullptr;
+	delete PacketPool;
 }
 
 FServoProtocol * FServoProtocol::Get()
@@ -425,6 +457,17 @@ TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> FServoProtocol::AllocNetPacket()
 	return RecyclePool.Alloc();
 }
 
+TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> FServoProtocol::AllocHeartbeat()
+{
+	TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>&& ret = RecyclePool.Alloc();
+
+	ret->ReUseAsHeartbeat(Syncword);
+
+	ret->CheckIntegrity();
+
+	return ret;
+}
+
 void FServoProtocol::DeallockNetPacket(const TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& InSharedPtr, bool bForceRecycle)
 {
 	if (!InSharedPtr.IsValid())
@@ -448,6 +491,19 @@ void FServoProtocol::DeallockNetPacket(const TSharedPtr<FSNetPacket, ESPMode::Th
 int32 FServoProtocol::RecyclePoolNum()
 {
 	return RecyclePool.Num();
+}
+
+bool FServoProtocol::PopWithRecycle(TSharedPtr<FSNetPacket, ESPMode::ThreadSafe>& OutRecyclePacket)
+{
+	TSharedPtr<FSNetPacket, ESPMode::ThreadSafe> newPacket;
+	if (Pop(newPacket))
+	{
+		DeallockNetPacket(OutRecyclePacket);
+		OutRecyclePacket = MoveTemp(newPacket);
+		return true;
+	}
+
+	return false;
 }
 
 FServoProtocol* FServoProtocol::pSingleton = nullptr;
