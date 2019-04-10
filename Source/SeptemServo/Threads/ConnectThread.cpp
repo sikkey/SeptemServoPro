@@ -8,22 +8,22 @@ int32 FConnectThread::MaxReceivedCount = 1024 * 1024;
 
 FConnectThread::FConnectThread()
 	:FRunnable()
+	, TimeToDie(false)
 	, ConnectSocket(nullptr)
 	, ClientIPAdress(0ui32)
 	, Port(3717)
 	, RankId(0)
-	, TimeToDie(false)
 {
 	ReceivedData.Reset(MaxReceivedCount);
 }
 
 FConnectThread::FConnectThread(FSocket * InSocket, FIPv4Address & InIP, int32 InPort, int32 InRank)
 	:FRunnable()
+	, TimeToDie(false)
 	, ConnectSocket(InSocket)
 	, ClientIPAdress(InIP)
 	, Port(InPort)
 	, RankId(InRank)
-	, TimeToDie(false)
 {
 	ReceivedData.Reset(MaxReceivedCount);
 }

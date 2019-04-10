@@ -9,11 +9,11 @@ FListenThread::FListenThread()
 	, IPAdress(0ui32) // default ip = 0.0.0.0
 	, Port(3717)
 	, MaxBacklog(100)
+	, PoolTimespan(0)
+	, ListenerSocket(nullptr)
 	, Thread(nullptr)
 	, RankId(0)
-	, ListenerSocket(nullptr)
 	, ConnectionPoolThread(nullptr)
-	, PoolTimespan(0)
 {
 }
 

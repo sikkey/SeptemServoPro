@@ -378,9 +378,9 @@ void FSNetBufferFoot::SetNow()
 }
 
 FServoProtocol::FServoProtocol()
-	:RecyclePool(RecyclePoolMaxnum)
+	:Syncword(DEFAULT_SYNCWORD_INT32)
 	, PacketPoolCount(0)
-	, Syncword(DEFAULT_SYNCWORD_INT32)
+	, RecyclePool(RecyclePoolMaxnum)
 {
 	check(pSingleton == nullptr && "Protocol singleton can't create 2 object!");
 	pSingleton = this;
